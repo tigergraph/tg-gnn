@@ -1,0 +1,22 @@
+{
+    "nodes": [ 
+        {
+            "vertex_name": "product",
+            "features_list": {
+                "feature": "LIST",
+                "year": "INT"
+            },
+            "label": "label",
+            "split": "split"
+        }
+    ], 
+    "edges": [
+        {
+            "rel_name": "rel",
+            "src": "prodcut",
+            "dst": "prodcut"
+        }
+    ],
+
+    "data_dir": "/tg"
+}
