@@ -1,7 +1,5 @@
 import os
 import torch
-import pandas as pd
-import polars as pl
 import argparse
 from tg_utils import timeit
 
@@ -129,29 +127,3 @@ def renumber_data(data, metadata, local_rank, world_size):
         torch.cuda.empty_cache()
 
     return data
-
-
-metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "paper",
-            "features_list": {
-                "id": "INT", 
-                "feature": "LIST",
-            },
-            "label": "label",
-            "split": "split"
-        }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
-            "src": "paper",
-            "dst": "paper"
-        }
-    ],
-    "data_dir": "/tg/himanshu/data/ogbn_paper_sample/",
-    "num_classes": 172,
-    "num_features": 128,
-    "num_nodes": 111059956
-}

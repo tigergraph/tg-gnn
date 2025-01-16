@@ -67,7 +67,6 @@ def load_tg_data(metadata, local_rank):
         features_tensor = torch.as_tensor(
             node_df.iloc[:, feature_start_idx:].values, dtype=torch.float32
         ).to("cpu")
-        print(f"feature tensor shape {features_tensor.shape}")
 
         # Store in data dictionary
         data[vertex_name] = {
@@ -76,10 +75,7 @@ def load_tg_data(metadata, local_rank):
             "label": label_tensor,
             "split": split_tensor,
         }
-        print(
-            f"Processed node data for {vertex_name}: "
-        )
-
+        
         # Clean up GPU memory
         del node_df
         torch.cuda.empty_cache()
