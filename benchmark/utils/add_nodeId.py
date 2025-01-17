@@ -42,4 +42,3 @@ file_path = "/tg/himanshu/data/ogbn_papers100M/node_feat.csv"
 output_path = "/tg/himanshu/data/ogbn_papers100M/node_feat_with_id.csv" 
 
 add_incremental_counter_with_custom_delimiter(file_path, output_path, delimiter="|")
-# add_incremental_counter_with_delimiter(file_path, output_path, delimiter="|")

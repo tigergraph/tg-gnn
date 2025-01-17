@@ -1,6 +1,6 @@
 import torch
 import torch.distributed as dist
-from tg_utils import timeit
+from .tg_utils import timeit
 
 
 @timeit

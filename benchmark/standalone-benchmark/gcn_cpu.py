@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--hidden_channels', type=int, default=256)
-    parser.add_argument('--num_layers', type=int, default=3)
+    parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--epochs', type=int, default=4)
     parser.add_argument('--batch_size', type=int, default=1024)
@@ -159,7 +159,6 @@ if __name__ == '__main__':
         print("Warning: may not have enough RAM to use this many GPUs.")
         print("Consider upgrading RAM or using less GPUs if an error occurs.")
         print("Estimated RAM Needed: ~" + str(gb_ram_needed))
-    print('Let\'s use', world_size, 'GPUs!')
     dataset = PygNodePropPredDataset(name='ogbn-papers100M',
                                      root='dataset/ogbn-papers100M')
     split_idx = dataset.get_idx_split()

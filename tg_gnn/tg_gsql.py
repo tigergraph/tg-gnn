@@ -1,8 +1,7 @@
 import argparse
 from pyTigerGraph import TigerGraphConnection
 import re
-import time
-from tg_utils import timeit
+from .tg_utils import timeit
 
 
 def is_query_installed(

@@ -4,9 +4,9 @@ import argparse
 import argparse
 import os
 from pyTigerGraph import TigerGraphConnection
-from tg_gsql import create_gsql_query, install_and_run_query
-from tg_utils import timeit
-from tg_renumber import renumber_data
+from .tg_gsql import create_gsql_query, install_and_run_query
+from .tg_utils import timeit
+from .tg_renumber import renumber_data
 
 
 

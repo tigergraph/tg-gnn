@@ -1,3 +1,18 @@
+Metadata-Version: 2.2
+Name: tg-gnn
+Version: 0.1.0
+Summary: Tigergraph GNN project
+Author: Zettabolt
+License: Apache-2.0
+Keywords: graph,gnn,tigergraph
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+Requires-Dist: pytest>=6.2.0; extra == "dev"
+
 # TG-GNN
 
 This project is intended for using [TigerGraph](https://www.tigergraph.com/) as a graph data storage solution in combination with [cuGraph](https://github.com/rapidsai/cugraph) and [cuGraph-PyG](https://github.com/rapidsai/cugraph-pyg). By leveraging these tools, you can train a GNN model on multi-GPU setups at any scale.
@@ -20,10 +35,7 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
    ```bash
    pip install -r requirements.txt
    ```
-4. **Install project in editable mode:**
-    ```bash
-    pip install -e .
-    ```
+
 ---
 
 ## Changes Required to Run a GCN Model on Any TigerGraph Graph

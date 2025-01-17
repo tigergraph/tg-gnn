@@ -43,8 +43,8 @@ from pylibwholegraph.torch.initialize import (
 )
 
 from datetime import timedelta
-from tg_data import load_partitioned_data, export_tg_data
-from tg_shuffle import shuffle_splits
+from tg_gnn.tg_data import load_partitioned_data, export_tg_data
+from tg_gnn.tg_shuffle import shuffle_splits
 
 # Allow computation on objects that are larger than GPU memory
 # https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory

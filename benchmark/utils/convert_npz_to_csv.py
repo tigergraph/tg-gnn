@@ -3,7 +3,7 @@ import pandas as pd
 from multiprocessing import Pool
 
 # Load the .npz file
-file_path = '/tg/gnn/cugraph/python/cugraph-pyg/cugraph_pyg/examples/dataset/ogbn_papers100M/raw/data.npz'  # Replace with your file path
+file_path = '/tg/gnn/cugraph/python/cugraph-pyg/cugraph_pyg/examples/dataset/ogbn_papers100M/raw/data.npz' 
 data = np.load(file_path)
 
 def write_to_csv(args):
@@ -19,30 +19,14 @@ def write_to_csv(args):
     df.to_csv(output_file, index=False)
     print(f"Data under key '{key}' has been written to {output_file}.")
 
-if False:
-    # Prepare data for multiprocessing (pass as a list of tuples)
-    tasks = [(key, data[key]) for key in data.keys()]
 
-    # Use a multiprocessing pool to write CSVs in parallel
-    if __name__ == "__main__":
-        with Pool() as pool:
-            pool.map(write_to_csv, tasks)
-
-    print("All CSV files have been written.")
-
-
-
-
-# Load the .npz file
-# file_path = "/tg/gnn/cugraph/python/cugraph-pyg/cugraph_pyg/examples/dataset/ogbn_papers100M/raw/node-label.npz"
-# data = np.load(file_path)
 
 
 import polars as pl
 
 
 # Extract the array
-node_labels = data['edge_index']  # Assuming the key is 'node_label'
+data = data['edge_index']  
 
 # Flatten the array to 1D if it's multidimensional
 # node_labels = node_labels.flatten()
