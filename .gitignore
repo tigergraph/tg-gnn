@@ -1,0 +1,129 @@
+# -----------------
+# Python Ignored Files
+# -----------------
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from PyInstaller
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environments
+.env/
+.venv/
+venv/
+ENV/
+env/
+venv.bak/
+venv_old/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# VSCode
+.vscode/
+.history/
+
+# PyCharm
+.idea/
+*.iml
+
+# mypy, flake8, coverage, and other tool caches, logs, or outputs
+.mypy_cache/
+.dmypy.json
+.dmypy/
+.cache/
+.coverage
+.coverage.*
+*.cover
+.hypothesis/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.coveragerc
+*.py,cover
+htmlcov/
+pytestdebug.log
+
+# Sphinx documentation
+docs/_build/
+doc/_build/
+site/
+
+# pytest temp
+pytest_tmp/
+
+# Temporary files
+*.swp
+*.swo
+*.tmp
+*~
+
+# CSV/TSV logs
+*.log
+*.log.*
+
+# Data files / large files (optional)
+*.csv
+*.tsv
+*.npz
+*.gz
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# If your project uses Poetry, ignore the virtual environment if it's kept in `.venv`
+# (Uncomment this if needed; it's already above as part of "Environments")
+# .venv/
+
+# If your project uses conda environments, ignore them:
+# (Uncomment if you keep a conda environment in your repo)
+# .conda/
+# .condarc
+
+# If you have wheelhouse
+wheelhouse/
+
+# -----------------
+# End of file
+# -----------------
