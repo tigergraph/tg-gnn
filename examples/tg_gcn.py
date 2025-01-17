@@ -269,33 +269,34 @@ def parse_args():
     parser.add_argument("--host", default="http://172.17.0.2")
     parser.add_argument("--username", "-u", default="tigergraph")
     parser.add_argument("--password", "-p", default="tigergraph")
+    parser.add_argument("--skip_tg_write", "-s", action="store_true", default=True)
 
 
     return parser.parse_args()
 
-# metadata = {
-#     "nodes": [ 
-#         {
-#             "vertex_name": "product",
-#             "features_list": {
-#                 "feature": "LIST"
-#             },
-#             "label": "label",
-#             "split": "split"
-#         }
-#     ], 
-#     "edges": [
-#         {
-#             "rel_name": "rel",
-#             "src": "product",
-#             "dst": "product"
-#         }
-#     ],
-#     "data_dir": "/tg/tmp/ogbn_product",
-#     "num_classes": 47,
-#     "num_features": 100,
-#     "num_nodes": 2449029
-# }
+metadata = {
+    "nodes": [ 
+        {
+            "vertex_name": "product",
+            "features_list": {
+                "feature": "LIST"
+            },
+            "label": "label",
+            "split": "split"
+        }
+    ], 
+    "edges": [
+        {
+            "rel_name": "rel",
+            "src": "product",
+            "dst": "product"
+        }
+    ],
+    "data_dir": "/tg/tmp/ogbn_product",
+    "num_classes": 47,
+    "num_features": 100,
+    "num_nodes": 2449029
+}
 
 metadata = {
     "nodes": [ 
@@ -348,7 +349,7 @@ if __name__ == "__main__":
 
         init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
         
-        if global_rank == 0:
+        if global_rank == 0 and not args.skip_tg_write:
             # tg connection
             conn = TigerGraphConnection(
                 host=args.host,
