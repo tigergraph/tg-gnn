@@ -30,10 +30,8 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
 
 To integrate your TigerGraph graph with the GCN model, a few schema updates and metadata configurations are required.
 
-### 1. Update the Schema
-
-- Ensure that your TigerGraph schema is compatible with your model’s needs.  
-- The vertex schema (e.g., “paper” as shown below) should include attributes for node features, labels, and data splits (train/val/test).
+### 1. Load data on Tigergraph
+- To load please follow instructions available in benchmark/Benchmark.md 
 
 ### 2. Configure Metadata
 
