@@ -1,4 +1,0 @@
-benchmark
-examples
-tests
-tg_gnn
