@@ -73,7 +73,7 @@ jupyter_server_terminals==0.5.3
 jupyterlab_pygments==0.3.0
 kiwisolver==1.4.7
 lazy_loader==0.4
-libcudf-cu12==24.10.1
+libcudf-cu12==24.12.0
 libcuspatial-cu12==24.10.0
 libucx-cu12==1.17.0
 libucxx-cu12==0.40.0
