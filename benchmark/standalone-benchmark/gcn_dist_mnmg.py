@@ -20,6 +20,8 @@ import warnings
 import tempfile
 import time
 import json
+from datetime import timedelta
+
 
 
 import torch
@@ -354,9 +356,9 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--fan_out", type=int, default=30)
     parser.add_argument("--tempdir_root", type=str, default=None)
-    parser.add_argument("--dataset_root", type=str, default="dataset")
-    parser.add_argument("--dataset", type=str, default="ogbn-papers100M")
-    parser.add_argument("--skip_partition", action="store_true", default=True)
+    parser.add_argument("--dataset_root", type=str, default="/data")
+    parser.add_argument("--dataset", type=str, default="ogbn-products")
+    parser.add_argument("--skip_partition", type=bool, default=True)
     parser.add_argument("--wg_mem_type", type=str, default="distributed")
 
     parser.add_argument("--in_memory", action="store_true", default=True)
@@ -370,7 +372,7 @@ if __name__ == "__main__":
     wall_clock_start = time.perf_counter()
 
     if "LOCAL_RANK" in os.environ:
-        dist.init_process_group("nccl")
+        dist.init_process_group("nccl", timeout=timedelta(seconds=7200))
         world_size = dist.get_world_size()
         global_rank = dist.get_rank()
         local_rank = int(os.environ["LOCAL_RANK"])
