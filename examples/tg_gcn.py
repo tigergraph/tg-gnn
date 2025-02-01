@@ -265,11 +265,11 @@ def parse_args():
     parser.add_argument("--in_memory", action="store_true", default=True)
     parser.add_argument("--seeds_per_call", type=int, default=-1)
     parser.add_argument("--tempdir_root", type=str, default="/tmp")
-    parser.add_argument("-g", "--graph", default="ogbn_papers")
-    parser.add_argument("--host", default="http://172.17.0.2")
+    parser.add_argument("-g", "--graph", default="ogbn_products_zetta")
+    parser.add_argument("--host", default="http://172.17.0.3")
     parser.add_argument("--username", "-u", default="tigergraph")
     parser.add_argument("--password", "-p", default="tigergraph")
-    parser.add_argument("--skip_tg_write", "-s", action="store_true", default=True)
+    parser.add_argument("--skip_tg_write", "-s", action="store_true", default=False)
 
 
     return parser.parse_args()
@@ -279,10 +279,10 @@ metadata = {
         {
             "vertex_name": "product",
             "features_list": {
-                "feature": "LIST"
+                "embedding": "LIST"
             },
-            "label": "label",
-            "split": "split"
+            "label": "node_label",
+            "split": "train_val_test"
         }
     ], 
     "edges": [
@@ -292,36 +292,36 @@ metadata = {
             "dst": "product"
         }
     ],
-    "data_dir": "/tg/tmp/ogbn_product",
+    "data_dir": "/data/ogbn_product",
     "num_classes": 47,
     "num_features": 100,
     "num_nodes": 2449029
 }
 
-metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "paper",
-            "features_list": {
-                "feature": "LIST",
+# metadata = {
+#     "nodes": [ 
+#         {
+#             "vertex_name": "paper",
+#             "features_list": {
+#                 "feature": "LIST",
 
-            },
-            "label": "label",
-            "split": "split"
-        }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
-            "src": "paper",
-            "dst": "paper"
-        }
-    ],
-    "data_dir": "/tg/tmp/ogbn_paper",
-    "num_classes": 172,
-    "num_features": 128,
-    "num_nodes": 111059956
-}
+#             },
+#             "label": "label",
+#             "split": "split"
+#         }
+#     ], 
+#     "edges": [
+#         {
+#             "rel_name": "rel",
+#             "src": "paper",
+#             "dst": "paper"
+#         }
+#     ],
+#     "data_dir": "/tg/tmp/ogbn_paper",
+#     "num_classes": 172,
+#     "num_features": 128,
+#     "num_nodes": 111059956
+# }
 
 if __name__ == "__main__":
     args = parse_args()

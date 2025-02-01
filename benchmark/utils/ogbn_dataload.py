@@ -38,25 +38,38 @@ def main():
         sys.exit(1)
 
     # Define the GSQL script with the provided parameters
-    gsql_script = f"""
+    node_data_load = f"""
     USE GRAPH {args.graph_name}
     BEGIN
-    CREATE LOADING JOB load_social FOR GRAPH {args.graph_name} {{
-        DEFINE FILENAME file1="{args.file1}";
-        DEFINE FILENAME file2="{args.file2}";
-        LOAD file2 TO VERTEX product VALUES ($0, _) USING header="false", separator=",";
-        LOAD file2 TO EDGE rel VALUES ($0, $1, _) USING header="false", separator=",";
+    CREATE LOADING JOB load_data FOR GRAPH {args.graph_name} {{
+        DEFINE FILENAME f="{args.node_file}";
+        LOAD f TO VERTEX product VALUES ($1, _, $0, _) USING header="true", separator=",";
     }}
     END
-    RUN LOADING JOB load_social
-    DROP JOB load_social
+    RUN LOADING JOB load_data
+    DROP JOB load_data
+    set exit_on_error = "false"
+    """
+
+    edge_data_load = f"""
+    USE GRAPH {args.graph_name}
+    BEGIN
+    CREATE LOADING JOB load_data FOR GRAPH {args.graph_name} {{
+        DEFINE FILENAME f="{args.edge_file}";
+        LOAD f TO EDGE rel VALUES ($0, $1) USING header="false", separator=",";
+    }}
+    END
+    RUN LOADING JOB load_data
+    DROP JOB load_data
     set exit_on_error = "false"
     """
 
     # Execute the GSQL script
     try:
         print("Executing GSQL script...")
-        response = conn.gsql(gsql_script)
+        response = conn.gsql(node_data_load)
+
+        # response = conn.gsql(edge_data_load)
         print("GSQL script executed successfully.")
         print("Response:", response)
     except Exception as e:
@@ -65,3 +78,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
