@@ -17,6 +17,8 @@ def parse_arguments():
                         help='Path to node data file')
     parser.add_argument('--node_split_file', '-s', type=str, default="",
                         help='Path to node data file')
+    parser.add_argument('--node_label_file', '-l', type=str, default="",
+                        help='Path to node data file')
 
     parser.add_argument('--edge_file', '-e', type=str, default="",
                         help='Path to the edge file')
@@ -47,7 +49,7 @@ def main():
             BEGIN
             CREATE LOADING JOB load_data FOR GRAPH {args.graph_name} {{
                 DEFINE FILENAME f="{args.node_feature_file}";
-                LOAD f TO VERTEX product VALUES ($1, _, $0, _) USING header="true", separator=",";
+                LOAD f TO VERTEX product VALUES ($1, SPLIT($0, ','), _, _) USING header="false", separator="|";
             }}
             END
             RUN LOADING JOB load_data
@@ -61,6 +63,19 @@ def main():
         CREATE LOADING JOB load_data FOR GRAPH {args.graph_name} {{
             DEFINE FILENAME f="{args.node_split_file}";
             LOAD f TO VERTEX product VALUES ($0, _, _, $1) USING header="true", separator=",";
+        }}
+        END
+        RUN LOADING JOB load_data
+        DROP JOB load_data
+        set exit_on_error = "false"
+        """
+    if args.node_label_file != "":
+        node_label_load = f"""
+        USE GRAPH {args.graph_name}
+        BEGIN
+        CREATE LOADING JOB load_data FOR GRAPH {args.graph_name} {{
+            DEFINE FILENAME f="{args.node_label_file}";
+            LOAD f TO VERTEX product VALUES ($0, _,$1, _) USING header="false", separator=",";
         }}
         END
         RUN LOADING JOB load_data
@@ -85,8 +100,14 @@ def main():
     # Execute the GSQL script
     try:
         print("Executing GSQL script...")
-        response = conn.gsql(node_split_load)
-
+        if args.node_feature_file != "":
+            response = conn.gsql(node_feature_load)
+        if args.node_split_file != "":
+            response = conn.gsql(node_split_load)
+        if args.edge_file != "":
+            response = conn.gsql(edge_data_load)
+        if args.node_label_file != "":
+            response = conn.gsql(node_label_load)
         # response = conn.gsql(edge_data_load)
         print("GSQL script executed successfully.")
         print("Response:", response)
