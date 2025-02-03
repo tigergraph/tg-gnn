@@ -269,29 +269,30 @@ def parse_args():
     parser.add_argument("--host", default="http://172.17.0.3")
     parser.add_argument("--username", "-u", default="tigergraph")
     parser.add_argument("--password", "-p", default="tigergraph")
-    parser.add_argument("--skip_tg_write", "-s", action="store_true", default=False)
+    parser.add_argument("--skip_tg_write", "-s", type=bool, default=False)
 
 
     return parser.parse_args()
 
 metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "product",
+    "nodes": {
+        "product": {
             "features_list": {
                 "embedding": "LIST"
             },
             "label": "node_label",
-            "split": "train_val_test"
+            "split": "train_val_test",
+            "num_nodes": 2449029,
+            "num_classes": 47,
+            "num_features": 100,
         }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
+    }, 
+    "edges": {
+        "rel": {
             "src": "product",
             "dst": "product"
         }
-    ],
+    },
     "data_dir": "/data/ogbn_product",
     "num_classes": 47,
     "num_features": 100,
@@ -326,7 +327,6 @@ metadata = {
 if __name__ == "__main__":
     args = parse_args()
     wall_clock_start = time.perf_counter()
-
     if "LOCAL_RANK" in os.environ:
         dist.init_process_group("nccl", timeout=timedelta(seconds=7200))
         world_size = dist.get_world_size()
@@ -363,7 +363,7 @@ if __name__ == "__main__":
             export_tg_data(conn, metadata, world_size, force=True)
 
         dist.barrier()
-        data, split_idx, meta = load_partitioned_data(
+        data, split_idx = load_partitioned_data(
             metadata,
             local_rank,
             args.wg_mem_type,
@@ -371,13 +371,16 @@ if __name__ == "__main__":
         )
 
         split_idx = shuffle_splits(split_idx, global_rank, world_size)
+        print(f"train shape: {split_idx['train'].shape}")
+        print(f"val shape: {split_idx['val'].shape}")
+        print(f"test shape: {split_idx['test'].shape}")
         dist.barrier()
 
         model = torch_geometric.nn.models.GCN(
-            meta["num_features"],
+            metadata["num_features"],
             args.hidden_channels,
             args.num_layers,
-            meta["num_classes"],
+            metadata["num_classes"],
         ).to(device)
         model = DistributedDataParallel(model, device_ids=[local_rank])
 
@@ -392,7 +395,7 @@ if __name__ == "__main__":
                 args.epochs,
                 args.batch_size,
                 args.fan_out,
-                meta["num_classes"],
+                metadata["num_classes"],
                 wall_clock_start,
                 tempdir,
                 args.num_layers,

@@ -49,29 +49,27 @@ def load_tg_data(
     # import after rmm re-initialization
     import cudf
     data_dir = metadata.get("data_dir", "")
-    nodes_meta = metadata.get("nodes", [])
-    edges_meta = metadata.get("edges", [])
+    nodes_meta = metadata.get("nodes", {})
+    edges_meta = metadata.get("edges", {})
     
     # Determine whether to use HeteroData or Data based on the number of node and edge types
     is_hetero = len(nodes_meta) > 1 or len(edges_meta) > 1
     data = HeteroData() if is_hetero else Data()
 
 
-    def load_node_csv(meta: dict) -> dict | None:
+    def load_node_csv(vertex_name: str, meta: dict) -> dict | None:
         """
         Reads a node CSV file and extracts node features, labels, and masks.
 
         Args:
-            meta (dict): Metadata for the node type, expected to contain:
-                - "vertex_name" (str): Name of the node type.
-                - "label" (bool, optional): Whether the node has labels.
-                - "split" (bool, optional): Whether the node data includes train/val/test splits.
+            vertex_name (str): Name of the node type.
+            meta (dict): Metadata for the node type, expected to contain info about
+                features (dict), label and split info
 
         Returns:
             dict | None: A dictionary containing node data suitable for updating the `Data` or `HeteroData` object.
                           Returns None if the file does not exist.
         """
-        vertex_name = meta.get("vertex_name", "")
         file_path = os.path.join(data_dir, f"{vertex_name}_p{local_rank}.csv")
         if not os.path.exists(file_path):
             print(f"Node file not found: {file_path}")
@@ -108,24 +106,24 @@ def load_tg_data(
         del df
         return node_data
 
-    def load_edge_csv(meta: dict) -> tuple | None:
+    def load_edge_csv(rel_name: str, meta: dict) -> tuple | None:
         """
         Reads an edge CSV file and extracts edge indices, attributes, labels, and masks.
 
         Args:
+            rel_name (str): Relationship name. 
             meta (dict): Metadata for the edge type, expected to contain:
                 - "src" (str): Source node type.
-                - "rel_name" (str): Relationship name.
                 - "dst" (str): Destination node type.
-                - "label" (bool, optional): Whether the edge has labels.
-                - "split" (bool, optional): Whether the edge data includes train/val/test splits.
+                - "label" (str, optional): the edge label name.
+                - "split" (str, optional): the edge info about train/val/test splits.
 
         Returns:
             tuple | None: A tuple containing the edge relationship tuple and a dictionary of edge data.
                            Returns None if the file does not exist.
         """
-        src, rel_name, dst = (
-            meta.get("src", ""), meta.get("rel_name", ""), meta.get("dst", "")
+        src, dst = (
+            meta.get("src", ""), meta.get("dst", "")
         )
         rel = (src, rel_name, dst)
         file_name = f"{src}_{rel_name}_{dst}_p{local_rank}.csv"
@@ -179,20 +177,20 @@ def load_tg_data(
         return rel, edge_data
 
     # Process each node
-    for node_meta in nodes_meta:
-        node_data = load_node_csv(node_meta)
+    for vertex_name, node_meta in nodes_meta.items():
+        node_data = load_node_csv(vertex_name, node_meta)
         if node_data is None:
             continue
         
         # If hetero, store it under the node type key
         if isinstance(data, HeteroData):
-            data[node_meta["vertex_name"]].update(node_data)
+            data[vertex_name].update(node_data)
         else:
             data.update(node_data)
 
     # Process each edge
-    for edge_meta in edges_meta:
-        rel, edge_data = load_edge_csv(edge_meta)
+    for rel_name, edge_meta in edges_meta.items():
+        rel, edge_data = load_edge_csv(rel_name, edge_meta)
         if edge_data is None:
             continue
         
@@ -245,12 +243,12 @@ def load_partitioned_data(
 
     # Load TG data and renumber the node ids
     data = load_tg_data(metadata, local_rank, world_size, renumber=True)
+    print("loading data is completed...")
 
     split_idx = {}
 
     # Load nodes
-    for node_meta in metadata["nodes"]:
-        vertex_name = node_meta["vertex_name"]
+    for vertex_name, node_meta in metadata["nodes"].items():
         features_list = node_meta.get("features_list", {})
         labels = node_meta.get("label", "")
         splits = node_meta.get("split", "")
@@ -261,12 +259,14 @@ def load_partitioned_data(
             features_tensor = node_data.x
             if features_tensor is not None:
                 feature_store[vertex_name, "x"] = features_tensor
+                del features_tensor
 
         # Load labels
         if labels:
             labels_tensor = node_data.y
             if labels_tensor is not None:
                 feature_store[vertex_name, "y"] = labels_tensor
+                del labels_tensor
 
         # Load splits
         if splits:
@@ -277,6 +277,9 @@ def load_partitioned_data(
                     if hasattr(node_data, 'node_ids') 
                     else None
                 )
+
+                print(f"train shape: {split_idx['train'].shape}")
+                del node_data.train_mask
             
             if "val_mask" in node_data :
                 val_mask = node_data.val_mask
@@ -285,7 +288,9 @@ def load_partitioned_data(
                     if hasattr(node_data, 'node_ids') 
                     else None
                 )
-            
+                print(f"valid shape: {split_idx['val'].shape}")
+                del node_data.val_mask
+
             if "test_mask" in node_data : 
                 test_mask = node_data.test_mask
                 split_idx["test"] = (
@@ -294,13 +299,13 @@ def load_partitioned_data(
                     else None
                 )
 
+                print(f"test shape: {split_idx['test'].shape}")
+                del node_data.test_mask
 
-        del labels_tensor, split_tensor, features_tensor
         torch.cuda.empty_cache()
 
     # Load edges
-    for edge_meta in metadata["edges"]:
-        rel_name = edge_meta["rel_name"]
+    for rel_name, edge_meta in metadata["edges"].items():
         src_name = edge_meta["src"]
         dst_name = edge_meta["dst"]
         rel = (src_name, rel_name, dst_name)
@@ -314,14 +319,22 @@ def load_partitioned_data(
             edge_indices_tensor = data.edge_index
 
         if edge_indices_tensor is not None:
-            if metadata[src_name]["num_nodes"] is None or metadata[dst_name]["num_nodes"] is None:
+            if (
+                metadata["nodes"][src_name]["num_nodes"] is None 
+                or metadata["nodes"][dst_name]["num_nodes"] is None
+            ):
                 graph_store[
                     (src_name, rel_name, dst_name), "coo", False
                 ] = edge_indices_tensor
             else:
                 graph_store[
-                    (src_name, rel_name, dst_name), "coo", False,
-                    (metadata[src_name]["num_nodes"], metadata[dst_name]["num_nodes"])
+                    (src_name, rel_name, dst_name), 
+                    "coo", 
+                    False,
+                    (
+                        metadata["nodes"][src_name]["num_nodes"], 
+                        metadata["nodes"][dst_name]["num_nodes"]
+                    )
                 ] = edge_indices_tensor
         
         # TODO: Need to confirm the logic with Alex about 
@@ -333,8 +346,8 @@ def load_partitioned_data(
             edge_attr_tensor = edge_data.edge_attr
             if edge_attr_tensor is not None:
                 feature_store[(rel, "edge_attr")] = edge_attr_tensor
-
-        del edge_indices_tensor
+                del edge_indices_tensor
+        
         torch.cuda.empty_cache()
 
         # TODO: edge labels and edge split mask handling
@@ -343,24 +356,28 @@ def load_partitioned_data(
 
 
 metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "product",
-            "features_list": { 
-                "feature": "LIST"
+    "nodes": {
+        "product": {
+            "features_list": {
+                "embedding": "LIST"
             },
-            "label": "label",
-            "split": "split"
+            "label": "node_label",
+            "split": "train_val_test",
+            "num_nodes": 2449029,
+            "num_classes": 47,
+            "num_features": 100,
         }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
+    }, 
+    "edges": {
+        "rel": {
             "src": "product",
             "dst": "product"
         }
-    ],
-    "data_dir": "/tg/tmp"
+    },
+    "data_dir": "/data/ogbn_product",
+    "num_classes": 47,
+    "num_features": 100,
+    "num_nodes": 2449029
 }
 
 

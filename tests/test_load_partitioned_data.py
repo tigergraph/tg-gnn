@@ -3,17 +3,17 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 import torch
 from torch_geometric.data import Data, HeteroData
-from tg_gnn import load_partitioned_data
+from tg_gnn.tg_data import load_partitioned_data, load_tg_data
 
 @pytest.fixture
 def mock_load_tg_data():
-    with patch("tg_gnn.load_tg_data") as mock_tg_data:
+    with patch("load_tg_data") as mock_tg_data:
         yield mock_tg_data
 
 @pytest.fixture
 def mock_cugraph_pyg():
-    with patch("tg_gnn.cugraph_pyg.data.GraphStore") as MockGraphStore, \
-         patch("tg_gnn.cugraph_pyg.data.WholeFeatureStore") as MockWholeFeatureStore:
+    with patch("GraphStore") as MockGraphStore, \
+         patch("WholeFeatureStore") as MockWholeFeatureStore:
         
         # Create mock instances
         mock_graph_store = MagicMock()
@@ -26,7 +26,7 @@ def mock_cugraph_pyg():
 
 @pytest.fixture
 def mock_cuda_empty_cache():
-    with patch("tg_gnn.torch.cuda.empty_cache") as mock_empty_cache:
+    with patch("torch.cuda.empty_cache") as mock_empty_cache:
         yield mock_empty_cache
 
 def test_load_partitioned_data_homogeneous_all_attributes(

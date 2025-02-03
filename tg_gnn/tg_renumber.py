@@ -19,8 +19,8 @@ def renumber_data(
         data (Data | HeteroData): The PyG data object (homogeneous or heterogeneous).
         metadata (dict): Metadata containing node and edge information:
                          {
-                           "nodes": [{"vertex_name": ..., ...}, ...],
-                           "edges": [{"src": ..., "dst": ..., "rel_name": ...}, ...]
+                           "nodes": {"vertex_name": ..., ...}, ...},
+                           "edges": {"rel_name":{"src": ..., "dst": ...,}, ...}
                          }
         local_rank (int): The local GPU rank on this node.
         world_size (int): The total number of ranks in the distributed setup.
@@ -42,9 +42,7 @@ def renumber_data(
     is_hetero = isinstance(data, HeteroData)
 
     # Process Nodes
-    for node_meta in metadata["nodes"]:
-        vertex_name = node_meta["vertex_name"]
-
+    for vertex_name, node_meta in metadata["nodes"].items():
         if is_hetero and vertex_name not in data:
             print(f"Data for '{vertex_name}' not found. Skipping...")
             continue
@@ -62,20 +60,16 @@ def renumber_data(
         node_offsets = torch.zeros((world_size,), dtype=torch.int64, device=device)
         dist.all_gather_into_tensor(node_offsets, current_num_nodes)
 
-        # Prepare a list to gather each rank's renumber map
-        # node_offsets[i] holds the #nodes for rank i
+        # create local map with offsets 
         map_tensor = [
             torch.zeros((2, node_offsets[i].item()), device=device, dtype=torch.int64)
             for i in range(node_offsets.numel())
         ]
 
-        # Compute cumsum for offsets: global shift for the start index of each rank
         node_offsets_cum = node_offsets.cumsum(0).cpu()
         this_rank = dist.get_rank()  # Current rank (0-based)
         local_offset = 0 if this_rank == 0 else int(node_offsets_cum[this_rank - 1])
 
-        # Create local renumber map for the node IDs on this rank
-        # (new_id, old_id)
         local_renumber_map = torch.stack(
             [
                 torch.arange(
@@ -89,14 +83,10 @@ def renumber_data(
             dim=0
         )
 
+        # Gather local map from all ranks 
         dist.all_gather(map_tensor, local_renumber_map)
-
-        # Concatenate all maps along dim=1 => shape [2, total_num_nodes]
         map_tensor = torch.cat(map_tensor, dim=1).cpu()
 
-        # Build a cudf DataFrame to map old ID -> new ID
-        #   - index = old IDs
-        #   - column 'id' = new IDs
         global_renumber_map[vertex_name] = cudf.DataFrame(
             data={"id": cupy.asarray(map_tensor[0])},
             index=cupy.asarray(map_tensor[1])
@@ -111,10 +101,9 @@ def renumber_data(
         del map_tensor, node_offsets, node_offsets_cum, current_num_nodes, local_renumber_map
 
     # Process/Renumber edges
-    for edge_meta in metadata["edges"]:
+    for rel_name, edge_meta in metadata["edges"].items():
         src_name = edge_meta["src"]
         dst_name = edge_meta["dst"]
-        rel_name = edge_meta["rel_name"]
         rel = (src_name, rel_name, dst_name)
 
         if is_hetero and rel not in data.edge_types:

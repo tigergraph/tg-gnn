@@ -100,8 +100,7 @@ def create_gsql_query(metadata, num_partitions):
     query = "CREATE DISTRIBUTED QUERY data_load_gen_query_dist() {\n\n"
 
     # Loop through nodes to generate node file and features 
-    for i, node in enumerate(nodes):
-        vertex_name = node["vertex_name"]
+    for i, (vertex_name, node) in enumerate(nodes.items()):
         features_list = node.get("features_list", {})
         label = node.get("label", "")
         split = node.get("split", "")
@@ -149,8 +148,7 @@ def create_gsql_query(metadata, num_partitions):
         query += f"\n"
 
     # Loop through edges to generate edge file, features, and labels
-    for i, edge in enumerate(edges):
-        rel_name = edge["rel_name"]
+    for i, (rel_name, edge) in enumerate(edges.items()):
         src = edge["src"]
         dst = edge["dst"]
         edge_features = edge.get("features_list", {})

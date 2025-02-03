@@ -4,7 +4,7 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 import torch
 from torch_geometric.data import Data, HeteroData
-from tg_gnn import load_tg_data
+from tg_gnn.tg_data import load_tg_data
 
 # Mock the renumber_data function
 @pytest.fixture
