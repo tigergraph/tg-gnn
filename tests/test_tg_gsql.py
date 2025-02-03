@@ -5,43 +5,40 @@ from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
 @pytest.fixture
 def basic_metadata():
     return {
-        "nodes": [
-            {
-                "vertex_name": "product",
+        "nodes": {
+            "product": {
                 "features_list": {"feature": "LIST"},
                 "label": "label",
                 "split": "split",
             }
-        ],
-        "edges": [
-            {
-                "rel_name": "rel",
+        },
+        "edges": {
+            "rel": {
                 "src": "product",
                 "dst": "product"
             }
-        ],
+        },
         "data_dir": "/test/data"
     }
 
 @pytest.fixture
 def complex_metadata():
     return {
-        "nodes": [
-            {
-                "vertex_name": "product",
+        "nodes": {
+            "product": {
                 "features_list": {"feature1": "INT", "feature2": "FLOAT"},
                 "label": "label",
                 "split": "split",
             },
-            {
+           "category": {
                 "vertex_name": "category",
                 "features_list": {},
                 "label": "",
                 "split": "",
             }
-        ],
-        "edges": [
-            {
+        },
+        "edges": {
+            "connects": {
                 "rel_name": "connects",
                 "src": "product",
                 "dst": "category",
@@ -49,53 +46,49 @@ def complex_metadata():
                 "label": "connection_type",
                 "split": "validation",
             },
-            {
-                "rel_name": "belongs_to",
+            "belongs_to": {
                 "src": "category",
                 "dst": "product",
                 "features_list": {},
                 "label": "",
                 "split": "",
             }
-        ],
+        },
         "data_dir": "/test/data"
     }
 
 @pytest.fixture
 def metadata_with_no_split_label():
     return {
-        "nodes": [
-            {
-                "vertex_name": "product",
+        "nodes": {
+            "product": {
                 "features_list": {"feature1": "INT", "feature2": "FLOAT"},
                 "label": "",
                 "split": "",
             },
-            {
+            "category": {
                 "vertex_name": "category",
                 "features_list": {},
                 "label": "",
                 "split": "",
             }
-        ],
-        "edges": [
-            {
-                "rel_name": "connects",
+        },
+        "edges": {
+            "connects": {
                 "src": "product",
                 "dst": "category",
                 "features_list": {"weight": "FLOAT"},
                 "label": "",
                 "split": "",
             },
-            {
-                "rel_name": "belongs_to",
+            "belongs_to": {
                 "src": "category",
                 "dst": "product",
                 "features_list": {},
                 "label": "",
                 "split": "",
             }
-        ],
+        },
         "data_dir": "/test/data"
     }
 
@@ -127,11 +120,11 @@ def test_multiple_nodes_and_edges(complex_metadata):
     """
     query = create_gsql_query(complex_metadata, num_partitions=2)
     # Check presence of all nodes
-    for node in complex_metadata["nodes"]:
-        assert f"// Process node: {node['vertex_name']}" in query
+    for vertex_name, _ in complex_metadata["nodes"].items():
+        assert f"// Process node: {vertex_name}" in query
     # Check presence of all edges
-    for edge in complex_metadata["edges"]:
-        assert f"// Process edge: {edge['rel_name']}" in query
+    for rel_name, _ in complex_metadata["edges"].items():
+        assert f"// Process edge: {rel_name}" in query
 
 # test different partitions
 @pytest.mark.parametrize("num_partitions", [1, 2, 3])

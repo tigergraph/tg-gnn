@@ -49,16 +49,16 @@ def test_load_partitioned_data_homogeneous_all_attributes(
     
     # Define metadata for a homogeneous graph
     metadata = {
-        "nodes": [
-            {"vertex_name": "node", "features_list": ["x"], "label": "y", "split": "split"}
-        ],
-        "edges": [
-            {"src": "node", "dst": "node", "rel_name": "connects"}
-        ]
+        "nodes": {
+            "node": {"features_list": ["x"], "label": "y", "split": "split"}
+        },
+        "edges": {
+            "connects": {"src": "node", "dst": "node"}
+        }
     }
     
     # Call load_partitioned_data
-    from tg_gnn import load_partitioned_data  # Adjust import as necessary
+    from tg_gnn.tg_data import load_partitioned_data  
     feature_graph, split_idx = load_partitioned_data(
         metadata=metadata,
         local_rank=0,
