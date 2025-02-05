@@ -114,7 +114,9 @@ Desktop.ini
 
 # If your project uses Poetry, ignore the virtual environment if it's kept in `.venv`
 # (Uncomment this if needed; it's already above as part of "Environments")
-# .venv/
+.venv/
+venv
+examples/datasets
 
 # If your project uses conda environments, ignore them:
 # (Uncomment if you keep a conda environment in your repo)

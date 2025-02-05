@@ -38,12 +38,11 @@ def renumber_data(
 
     global_renumber_map = {}
 
-    # Determine if the data is heterogeneous
     is_hetero = isinstance(data, HeteroData)
 
     # Process Nodes
     for vertex_name, node_meta in metadata["nodes"].items():
-        if is_hetero and vertex_name not in data:
+        if is_hetero and data[vertex_name] is None:
             print(f"Data for '{vertex_name}' not found. Skipping...")
             continue
 
@@ -158,96 +157,3 @@ def renumber_data(
 
     return data
 
-
-
-def initialize_distributed():
-    """
-    Initialize the distributed environment.
-    """
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        rank = int(os.environ['RANK'])
-        world_size = int(os.environ['WORLD_SIZE'])
-        local_rank = int(os.environ.get('LOCAL_RANK', 0))
-    else:
-        raise EnvironmentError("RANK and WORLD_SIZE environment variables are required for distributed training.")
-
-    # Initialize the process group
-    dist.init_process_group(backend='nccl')
-
-    return local_rank, world_size
-
-def create_sample_data(is_hetero: bool = False) -> tuple[Data | HeteroData, dict]:
-    """
-    Create sample Data or HeteroData objects along with metadata for demonstration.
-    """
-    if is_hetero:
-        data = HeteroData()
-
-        # Example for two node types: 'author' and 'paper'
-        data['author'].node_ids = torch.tensor([100, 101, 102])  # Sample node IDs
-        data['paper'].node_ids = torch.tensor([200, 201])
-
-        # Example edge type: author writes paper
-        data['author', 'writes', 'paper'].edge_index = torch.tensor([
-            [0, 1],
-            [0, 1]
-        ])
-
-        metadata = {
-            "nodes": [
-                {"vertex_name": "author"},
-                {"vertex_name": "paper"}
-            ],
-            "edges": [
-                {"src": "author", "dst": "paper", "rel_name": "writes"}
-            ]
-        }
-    else:
-        data = Data()
-
-        data.node_ids = torch.tensor([100, 101, 102, 103])  # Sample node IDs
-        data.edge_index = torch.tensor([
-            [0, 1, 2],
-            [1, 2, 3]
-        ])
-
-        metadata = {
-            "nodes": [
-                {"vertex_name": "node"}  # Single node type
-            ],
-            "edges": [
-                {"src": "node", "dst": "node", "rel_name": "edge"}  # Single edge type
-            ]
-        }
-
-    return data, metadata
-
-def main():
-    # Initialize distributed environment
-    local_rank, world_size = initialize_distributed()
-    rank = dist.get_rank()
-
-    # Optionally, print the rank information
-    print(f"Rank {rank}/{world_size} initialized on device cuda:{local_rank}")
-
-    # Create sample data
-    is_hetero = True  # Change to False to use Data instead of HeteroData
-    data, metadata = create_sample_data(is_hetero=is_hetero)
-
-    # Move data to the appropriate device
-    device = torch.device(f"cuda:{local_rank}")
-    data = data.to(device)
-
-    # Call renumber_data
-    renumbered_data = renumber_data(data, metadata, local_rank, world_size)
-
-    # Optionally, print the renumbered data for verification
-    if rank == 0:
-        print("Renumbered Data:")
-        print(renumbered_data)
-
-    # Finalize the distributed process group
-    dist.destroy_process_group()
-
-if __name__ == "__main__":
-    main()

@@ -147,3 +147,156 @@ def test_edge_case_no_label_no_split(metadata_with_no_split_label, num_partition
     assert "to_string(s.split)" not in query
     assert "to_string(e.connection_type)" not in query
     assert "to_string(e.validation)" not in query
+
+def test_minimal_nodes_and_edges():
+    metadata = {
+        "data_dir": "/data",
+        "nodes": {
+            "User": {}
+        },
+        "edges": {
+            "FRIENDS": {"src": "User", "dst": "User"}
+        }
+    }
+    num_partitions = 1
+    query = create_gsql_query(metadata, num_partitions)
+    
+    # Test basic structure
+    assert "CREATE DISTRIBUTED QUERY data_load_gen_query_dist() {" in query
+    assert "node_file0_p0" in query
+    assert "edge_file0_p0" in query
+    
+    # Test node generation
+    assert 'FROM User:s' in query
+    assert 'node_data_list = to_string(getvid(s))' in query
+    assert 'node_file0_p0.println(node_data_list)' in query
+    
+    # Test edge generation
+    assert 'User:s - (FRIENDS:e) -> User:t' in query
+    assert 'edge_data_list = to_string(getvid(s)) + "," + to_string(getvid(t))' in query
+    assert 'edge_file0_p0.println(edge_data_list)' in query
+
+def test_nodes_with_all_attributes():
+    metadata = {
+        "data_dir": "/data",
+        "nodes": {
+            "User": {
+                "label": "is_active",
+                "split": "train_val_split",
+                "features_list": {
+                    "numerical": "FLOAT",
+                    "tags": "LIST"
+                }
+            }
+        },
+        "edges": {}
+    }
+    num_partitions = 2
+    query = create_gsql_query(metadata, num_partitions)
+    
+    # Test file partitions
+    assert "FILE node_file0_p0" in query
+    assert "FILE node_file0_p1" in query
+    
+    # Test label and split
+    assert 'to_string(s.is_active)' in query
+    assert 'to_string(s.train_val_split)' in query
+    
+    # Test features
+    assert 'to_string(s.numerical)' in query
+    assert 'FOREACH feature IN s.tags DO' in query
+    
+    # Test partition logic
+    assert 'IF getvid(s) % 2 == 0' in query
+    assert 'IF getvid(s) % 2 == 1' in query
+
+def test_edges_with_all_attributes():
+    metadata = {
+        "data_dir": "/data",
+        "nodes": {},
+        "edges": {
+            "TRANSACTION": {
+                "src": "User",
+                "dst": "Product",
+                "label": "fraudulent",
+                "split": "split_ratio",
+                "features_list": {
+                    "amount": "FLOAT",
+                    "categories": "LIST"
+                }
+            }
+        }
+    }
+    num_partitions = 1
+    query = create_gsql_query(metadata, num_partitions)
+    
+    # Test edge metadata
+    assert 'User:s - (TRANSACTION:e) -> Product:t' in query
+    assert 'to_string(e.fraudulent)' in query
+    assert 'to_string(e.split_ratio)' in query
+    assert 'to_string(e.amount)' in query
+    assert 'FOREACH feature IN e.categories DO' in query
+
+def test_multiple_partitions():
+    metadata = {
+        "data_dir": "/data",
+        "nodes": {
+            "User": {}
+        },
+        "edges": {
+            "FRIENDS": {"src": "User", "dst": "User"}
+        }
+    }
+    num_partitions = 3
+    query = create_gsql_query(metadata, num_partitions)
+    
+    # Test partition files
+    assert "FILE node_file0_p0" in query
+    assert "FILE node_file0_p1" in query
+    assert "FILE node_file0_p2" in query
+    assert "FILE edge_file0_p0" in query
+    assert "FILE edge_file0_p1" in query
+    assert "FILE edge_file0_p2" in query
+    
+    # Test partition logic
+    assert 'IF getvid(s) % 3 == 0' in query
+    assert 'IF getvid(s) % 3 == 1' in query
+    assert 'IF getvid(s) % 3 == 2' in query
+
+def test_list_feature_handling():
+    metadata = {
+        "data_dir": "/data",
+        "nodes": {
+            "Product": {
+                "features_list": {
+                    "prices": "LIST",
+                    "name": "STRING"
+                }
+            }
+        },
+        "edges": {}
+    }
+    query = create_gsql_query(metadata, 1)
+    
+    # Test list feature expansion
+    assert 'FOREACH feature IN s.prices DO' in query
+    assert 'node_data_list = node_data_list + "," + to_string(feature)' in query
+    # Test regular feature
+    assert 'to_string(s.name)' in query
+
+def test_edge_case_single_partition():
+    metadata = {
+        "data_dir": "/data",
+        "nodes": {
+            "User": {}
+        },
+        "edges": {
+            "FRIENDS": {"src": "User", "dst": "User"}
+        }
+    }
+    num_partitions = 1
+    query = create_gsql_query(metadata, num_partitions)
+    
+    # Verify single partition syntax
+    assert "END;" in query  # Last partition should end with semicolon
+    assert "END,\n" not in query  # No comma for last partition
