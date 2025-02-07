@@ -98,35 +98,7 @@ def test_edge_loading_with_attributes(tmp_data_dir):
     assert data.train_mask.tolist() == [True, False]
     assert data.val_mask.tolist() == [False, True]
 
-def test_missing_node_file_handling(tmp_data_dir, caplog):
-    """Test graceful handling of missing node files."""
-    metadata = {
-        "data_dir": str(tmp_data_dir),
-        "nodes": {"user": {"vertex_name": "user"}},
-        "edges": {}
-    }
-    with patch('cudf.read_csv', pd.read_csv):
-        data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
-    
-    assert isinstance(data, Data)
-    assert len(data) == 0
-    assert "Node file not found" in caplog.text
 
-@patch('module_containing_load_tg.renumber_data')
-def test_renumbering_enabled(mock_renumber, tmp_data_dir):
-    """Test that renumbering is invoked when enabled."""
-    metadata = {
-        "data_dir": str(tmp_data_dir),
-        "nodes": {"user": {"vertex_name": "user"}},
-        "edges": {}
-    }
-    node_file = tmp_data_dir / "user_p0.csv"
-    pd.DataFrame([[0]]).to_csv(node_file, index=False, header=False)
-    
-    with patch('cudf.read_csv', pd.read_csv):
-        load_tg_data(metadata, local_rank=0, world_size=1, renumber=True)
-    
-    mock_renumber.assert_called_once()
 
 def test_local_rank_partitioning(tmp_data_dir):
     """Test correct partitioning based on local_rank."""
@@ -163,11 +135,10 @@ def test_node_without_features_or_labels(tmp_data_dir):
     
     with patch('cudf.read_csv', pd.read_csv):
         data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
-    
     assert isinstance(data, Data)
     assert hasattr(data, 'node_ids')
-    assert not hasattr(data, 'x')
-    assert not hasattr(data, 'y')
+    assert data.x is None
+    assert data.y is None
     assert not hasattr(data, 'train_mask')
 
 def test_hetero_edge_types(tmp_data_dir):

@@ -274,9 +274,12 @@ def parse_args():
 
     return parser.parse_args()
 
+
+# Please update the metadata as per your Graph attributes and features
 metadata = {
     "nodes": {
         "product": {
+            "vertex_name": "product",
             "features_list": {
                 "embedding": "LIST"
             },
@@ -289,40 +292,18 @@ metadata = {
     }, 
     "edges": {
         "rel": {
+            "rel_name": "rel",
             "src": "product",
             "dst": "product"
         }
     },
     "data_dir": "/data/ogbn_product",
     "num_classes": 47,
-    "num_features": 100,
-    "num_nodes": 2449029
+    "num_features": 100, 
+    "num_nodes": 2449029 
 }
 
-# metadata = {
-#     "nodes": [ 
-#         {
-#             "vertex_name": "paper",
-#             "features_list": {
-#                 "feature": "LIST",
 
-#             },
-#             "label": "label",
-#             "split": "split"
-#         }
-#     ], 
-#     "edges": [
-#         {
-#             "rel_name": "rel",
-#             "src": "paper",
-#             "dst": "paper"
-#         }
-#     ],
-#     "data_dir": "/tg/tmp/ogbn_paper",
-#     "num_classes": 172,
-#     "num_features": 128,
-#     "num_nodes": 111059956
-# }
 
 if __name__ == "__main__":
     args = parse_args()
@@ -333,12 +314,7 @@ if __name__ == "__main__":
         global_rank = dist.get_rank()
         local_rank = int(os.environ["LOCAL_RANK"])
         device = torch.device(local_rank)
-        # TODO: test if this change works 
-        # if global_rank == 0:
-        #     from rmm.allocators.torch import rmm_torch_allocator
-        #     torch.cuda.memory.change_current_allocator(rmm_torch_allocator)
-        # torch.distributed.barrier()
-
+        
         # Create the uid needed for cuGraph comms
         if global_rank == 0:
             cugraph_id = [cugraph_comms_create_unique_id()]
@@ -371,9 +347,6 @@ if __name__ == "__main__":
         )
 
         split_idx = shuffle_splits(split_idx, global_rank, world_size)
-        print(f"train shape: {split_idx['train'].shape}")
-        print(f"val shape: {split_idx['val'].shape}")
-        print(f"test shape: {split_idx['test'].shape}")
         dist.barrier()
 
         model = torch_geometric.nn.models.GCN(

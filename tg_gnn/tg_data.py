@@ -5,19 +5,25 @@ import argparse
 import os
 from pyTigerGraph import TigerGraphConnection
 from torch_geometric.data import Data, HeteroData
-from .tg_gsql import create_gsql_query, install_and_run_query
-from .tg_utils import timeit
-from .tg_renumber import renumber_data
+from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
+from tg_gnn.tg_utils import timeit
+from tg_gnn.tg_renumber import renumber_data
+import logging
+import sys
 
-
+logger = logging.getLogger(__name__)
 
 @timeit
 def export_tg_data(conn, metadata, local_world_size, force=False, timeout=2000000):
-    gsql_query = create_gsql_query(metadata, num_partitions=local_world_size)
-    # print(gsql_query)
-    install_and_run_query(conn, gsql_query, force=force, timeout=timeout)
+    try:
+        gsql_query = create_gsql_query(metadata, num_partitions=local_world_size)
+        install_and_run_query(conn, gsql_query, force=force, timeout=timeout)
+    except Exception as export_error:
+        logger.exception("Error exporting TG data: %s", export_error)
+        sys.exit(1)
 
 
+@timeit
 def load_tg_data(
         metadata: dict, 
         local_rank: int, 
@@ -72,9 +78,10 @@ def load_tg_data(
         """
         file_path = os.path.join(data_dir, f"{vertex_name}_p{local_rank}.csv")
         if not os.path.exists(file_path):
-            print(f"Node file not found: {file_path}")
+            logger.info(f"Node file not found: {file_path}")
+            logger.warning(f"Please make sure to run tg data export and export path should be accessible.")
             return None
-
+        
         df = cudf.read_csv(file_path, header=None)
         
         has_label = bool(meta.get("label", False))
@@ -128,13 +135,13 @@ def load_tg_data(
         rel = (src, rel_name, dst)
         file_name = f"{src}_{rel_name}_{dst}_p{local_rank}.csv"
         file_path = os.path.join(data_dir, file_name)
-
         if not os.path.exists(file_path):
-            print(f"Edge file not found: {file_path}")
+            logger.info(f"Edge file not found: {file_path}")
+            logger.warning("Please make sure to run tg data export and export path should be accessible.")
             return rel, None
 
         df = cudf.read_csv(file_path, header=None)
-
+        
         has_label = "label" in meta
         has_split = "split" in meta  # In case edges have splits
         features_start = 2 + int(has_label) + int(has_split)
@@ -146,10 +153,8 @@ def load_tg_data(
                 torch.as_tensor(df.iloc[:, 1].values, dtype=torch.long)
             ], dim=0)
         }
-        
-        # feature columns, store them in edge_attr
-        # TODO: feature attributes without edges info?
-        # is that okay? confirm with Alex
+
+
         if has_features:
             edge_data["edge_attr"] = torch.as_tensor(
                 df.iloc[:, features_start:].values,
@@ -243,7 +248,6 @@ def load_partitioned_data(
 
     # Load TG data and renumber the node ids
     data = load_tg_data(metadata, local_rank, world_size, renumber=True)
-    print("loading data is completed...")
 
     split_idx = {}
 
@@ -277,8 +281,6 @@ def load_partitioned_data(
                     if hasattr(node_data, 'node_ids') 
                     else None
                 )
-
-                print(f"train shape: {split_idx['train'].shape}")
                 del node_data.train_mask
             
             if "val_mask" in node_data :
@@ -288,7 +290,6 @@ def load_partitioned_data(
                     if hasattr(node_data, 'node_ids') 
                     else None
                 )
-                print(f"valid shape: {split_idx['val'].shape}")
                 del node_data.val_mask
 
             if "test_mask" in node_data : 
@@ -298,8 +299,6 @@ def load_partitioned_data(
                     if hasattr(node_data, 'node_ids') 
                     else None
                 )
-
-                print(f"test shape: {split_idx['test'].shape}")
                 del node_data.test_mask
 
         torch.cuda.empty_cache()
@@ -337,11 +336,6 @@ def load_partitioned_data(
                     )
                 ] = edge_indices_tensor
         
-        # TODO: Need to confirm the logic with Alex about 
-        # edge features population
-        # edge_attr_tensor contains src and dst id? shape
-        # (#edges, #edges_features)
-        # and how to handle the label
         if "edge_attr" in edge_data:
             edge_attr_tensor = edge_data.edge_attr
             if edge_attr_tensor is not None:
@@ -350,56 +344,5 @@ def load_partitioned_data(
         
         torch.cuda.empty_cache()
 
-        # TODO: edge labels and edge split mask handling
 
     return (feature_store, graph_store), split_idx
-
-
-metadata = {
-    "nodes": {
-        "product": {
-            "features_list": {
-                "embedding": "LIST"
-            },
-            "label": "node_label",
-            "split": "train_val_test",
-            "num_nodes": 2449029,
-            "num_classes": 47,
-            "num_features": 100,
-        }
-    }, 
-    "edges": {
-        "rel": {
-            "src": "product",
-            "dst": "product"
-        }
-    },
-    "data_dir": "/data/ogbn_product",
-    "num_classes": 47,
-    "num_features": 100,
-    "num_nodes": 2449029
-}
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("-g", "--graph", required=True)
-    parser.add_argument("--host", default="http://172.17.0.2")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-    args = parser.parse_args()
-    
-    # tg connection
-    conn = TigerGraphConnection(
-        host=args.host,
-        graphname=args.graph,
-        username=args.username,
-        password=args.password
-    )
-    conn.getToken(conn.createSecret())
-    
-    print("exporting tg data...")
-    export_tg_data(conn, metadata, 4, force=True)
-
-

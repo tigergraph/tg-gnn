@@ -1,8 +1,10 @@
 import argparse
 from pyTigerGraph import TigerGraphConnection
+import logging
 import re
-from .tg_utils import timeit
+from tg_gnn.tg_utils import timeit
 
+logger = logging.getLogger(__name__)
 
 def is_query_installed(
     conn, query_name: str, return_status: bool = False
@@ -203,57 +205,16 @@ def create_gsql_query(metadata, num_partitions):
 
 @timeit
 def install_and_run_query(conn, gsql_query, timeout=200000, force=True):
-    print("Installing the GSQL query...")
-    query_name = install_query(conn, gsql_query, force=force)
-    print("Running the GSQL query to export the data...") 
-    conn.runInstalledQuery(query_name, timeout=timeout)
+    try:
+        logger.info("Installing the GSQL query...")
+        query_name = install_query(conn, gsql_query, force=force)
+    except Exception as install_error:
+        logger.exception("Error installing the GSQL query: %s", install_error)
+        raise  
 
-metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "product",
-            "features_list": { 
-                "feature": "LIST"
-            },
-            "label": "label",
-            "split": "split"
-        }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
-            "src": "product",
-            "dst": "product"
-        }
-    ],
-    "data_dir": "/tg/tmp/ogbn_product",
-    "num_classes": 47,
-    "num_features": 100,
-    "num_nodes": 2449029
-}
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("-g", "--graph", required=True)
-    parser.add_argument("--host", default="http://172.17.0.2")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-    args = parser.parse_args()
-
-    print(f"graph name: {args.graph}")
-
-    gsql_query = create_gsql_query(metadata, 2)
-    print(gsql_query)
-
-    #tg connection
-    conn = TigerGraphConnection(
-        host=args.host,
-        graphname=args.graph,
-        username=args.username,
-        password=args.password
-    )
-    conn.getToken(conn.createSecret())
-    
-    install_and_run_query(conn, gsql_query, timeout=50000000, force=True)
+    try:
+        logger.info("Running the GSQL query to export the data...")
+        conn.runInstalledQuery(query_name, timeout=timeout)
+    except Exception as run_error:
+        logger.exception("Error running the installed GSQL query: %s", run_error)
+        raise

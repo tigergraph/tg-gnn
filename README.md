@@ -5,24 +5,29 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
 ---
 
 ## Getting Started
+### Cuda setup
+- Required Cuda version >= 11.8; 
+- Note: support for 11.8 will be drop very soon. so, use cuda >= 12.0
 
-### 1. Environment Setup
+### Environment Setup
 
 1. **Create a new virtual environment (recommended):**
    ```bash
-   python -m venv .venv
+   python -m venv venv
    ```
 2. **Activate the virtual environment:**
    ```bash
-   source .venv/bin/activate
+   source venv/bin/activate
    ```
 3. **Install project dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
-4. **Install project in editable mode:**
+4. **Install tg-gnn project**
     ```bash
-    pip install -e .
+    git clone https://github.com/tigergraph/tg-gnn.git
+    cd tg-gnn
+    pip install .
     ```
 ---
 
@@ -33,38 +38,61 @@ To integrate your TigerGraph graph with the GCN model, a few schema updates and 
 ### 1. Load data on Tigergraph
 - To load please follow instructions available in benchmark/Benchmark.md 
 
-### 2. Configure Metadata
+### 2. Configure Metadata 
 
 Below is a sample `metadata` dictionary that illustrates how to define the mapping between your TigerGraph entities and the model’s requirements:
 
 ```python
 metadata = {
-    "nodes": [
-        {
-            "vertex_name": "paper",
-            "features_list": {
-                "feature": "LIST",
+    "nodes": {
+        "<vertex_name 1>": {
+            "vertex_name>" : "<vertex_name 1>" 
+            "features_list" (optional): {
+                "feature1": "<feature_datatype (should be LIST or FLOAT)>",
+                "feature2": "LIST",
+                "feature3": "FLOAT"
             },
-            "label": "label",
-            "split": "split"
+            "label" (optional): "<label_attr_name>",
+            "split" (optional): "<split_attr_name>",
+            "num_nodes": <number of nodes>
+        },
+
+        "<vertex_name 2>": {
+            "vertex_name>" : "<vertex_name 2>" 
+            "features_list" (optional): {
+                "feature1": "<feature_datatype (should be LIST or FLOAT)>",
+                "feature2": "LIST",
+            },
+            "num_nodes": <number of nodes>
+        },
+        
+        "<vertex_name 3>": {
+            "vertex_name>" : "<vertex_name 3>",
+            "num_nodes": <number of nodes>
         }
-    ],
-    "edges": [
-        {
-            "rel_name": "rel",
-            "src": "paper",
-            "dst": "paper"
+
+    },
+    "edges": {
+        "<rel_name>": {
+            "rel_name": "<rel_name">,
+            "src": "<src_name>", 
+            "dst": "<dst_name>",
+            "features_list" (optional): {
+                "feature1": "<feature_datatype (should be LIST or FLOAT)>",
+                "feature2": "LIST",
+            }
         }
-    ],
-    "data_dir": "/tg/tmp/ogbn_paper",
+    },
+    "data_dir": "<path to export the data from tigergraph; should be accessible by tg as well as torchrun processes>",
 }
 ```
 
-- **`vertex_name`**: The name of the vertex in TigerGraph (e.g., `paper`).  
-- **`features_list`**: Specifies which node attributes are used as input features.  
+- **`vertex_name`**: The name of the node/vertex in TigerGraph (e.g., `paper`).  
+- **`features_list`**: Specifies which node attributes are used as input features. feature_datatype could be either "INT", "FLOAT" or "LIST" (list should only contain FLOAT/INT values for GNN training) 
 - **`label`**: Points to the attribute name that holds the label for training/validation/testing.  
 - **`split`**: Identifies the attribute that indicates whether a node belongs to the training, validation, or test set.  
-- **`data_dir`**: The temporary directory where TigerGraph will export the data.
+- **`num_nodes`**: Indicates the number of vertices/nodes for given vertex/node type.  
+- **`data_dir`**: The temporary directory where TigerGraph will export the data and data would be assesed by GNN model training process.
 
 ---
 

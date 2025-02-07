@@ -1,20 +1,42 @@
 {
     "nodes": {
-        "product": {
-            "features_list": {
-                "feature": "LIST",
-                "year": "INT"
+        "<vertex_name 1>": {
+            "vertex_name>" : "<vertex_name 1>" 
+            "features_list" (optional): {
+                "feature1": "<feature_datatype (should be LIST or FLOAT)>",
+                "feature2": "LIST",
+                "feature3": "FLOAT"
             },
-            "label": "label",
-            "split": "split"
+            "label" (optional): "<label_attr_name>",
+            "split" (optional): "<split_attr_name>",
+            "num_nodes": <number of nodes>
+        },
+
+        "<vertex_name 2>": {
+            "vertex_name>" : "<vertex_name 2>" 
+            "features_list" (optional): {
+                "feature1": "<feature_datatype (should be LIST or FLOAT)>",
+                "feature2": "LIST",
+            },
+            "num_nodes": <number of nodes>
+        },
+        
+        "<vertex_name 3>": {
+            "vertex_name>" : "<vertex_name 3>",
+            "num_nodes": <number of nodes>
         }
-    }, 
+
+    },
     "edges": {
-        "rel": {
-            "src": "prodcut",
-            "dst": "prodcut"
+        "<rel_name>": {
+            "rel_name": "<rel_name">,
+            "src": "<src_name>", 
+            "dst": "<dst_name>",
+            "features_list" (optional): {
+                "feature1": "<feature_datatype (should be LIST or FLOAT)>",
+                "feature2": "LIST",
+            }
         }
     },
-
-    "data_dir": "/tg"
+    "data_dir": "<path to export the data from tigergraph; should be accessible by tg as well as torchrun processes>",
 }

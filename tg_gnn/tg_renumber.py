@@ -2,7 +2,12 @@ import torch
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
 import os
+from tg_gnn.tg_utils import timeit
+import logging
 
+logger = logging.getLogger(__name__)
+
+@timeit
 def renumber_data(
     data: Data | HeteroData,
     metadata: dict,
@@ -41,15 +46,16 @@ def renumber_data(
     is_hetero = isinstance(data, HeteroData)
 
     # Process Nodes
+    logger.info("Renumbering the vertex ids...")
     for vertex_name, node_meta in metadata["nodes"].items():
         if is_hetero and data[vertex_name] is None:
-            print(f"Data for '{vertex_name}' not found. Skipping...")
+            logger.info(f"Data for '{vertex_name}' not found. Skipping...")
             continue
 
         # Retrieve node_ids
         node_ids = data[vertex_name].node_ids if is_hetero else data.node_ids
         if node_ids is None:
-            print(f"'node_ids' not found for '{vertex_name}'. Skipping...")
+            logger.info(f"'node_ids' not found for '{vertex_name}'. Skipping...")
             continue
 
         local_num_nodes = len(node_ids)
@@ -100,6 +106,7 @@ def renumber_data(
         del map_tensor, node_offsets, node_offsets_cum, current_num_nodes, local_renumber_map
 
     # Process/Renumber edges
+    logger.info("Mapping the edge indices with renumbered vertex ids...")
     for rel_name, edge_meta in metadata["edges"].items():
         src_name = edge_meta["src"]
         dst_name = edge_meta["dst"]
