@@ -17,8 +17,9 @@ def test_load_single_node_with_features_labels_splits(tmp_data_dir):
         "nodes": {
             "user": {
                 "vertex_name": "user",
-                "label": True,
-                "split": True,
+                "label": "label_col",
+                "split": "split_col",
+                "num_nodes": 2
             }
         },
         "edges": {}
@@ -46,8 +47,8 @@ def test_hetero_data_multiple_node_types(tmp_data_dir):
     metadata = {
         "data_dir": str(tmp_data_dir),
         "nodes": {
-            "user": {"vertex_name": "user"},
-            "item": {"vertex_name": "item"}
+            "user": {"vertex_name": "user", "num_nodes": 2},
+            "item": {"vertex_name": "item", "num_nodes": 2}
         },
         "edges": {}
     }
@@ -57,7 +58,7 @@ def test_hetero_data_multiple_node_types(tmp_data_dir):
     pd.DataFrame([[0]]).to_csv(item_file, index=False, header=False)
     
     with patch('cudf.read_csv', pd.read_csv):
-        data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
+        data = load_tg_data(metadata, renumber=False)
     
     assert isinstance(data, HeteroData)
     assert 'user' in data.node_types
@@ -69,7 +70,7 @@ def test_edge_loading_with_attributes(tmp_data_dir):
     """Test edge loading with indices, labels, splits, and features into Data."""
     metadata = {
         "data_dir": str(tmp_data_dir),
-        "nodes": {"user": {"vertex_name": "user"}},
+        "nodes": {"user": {"vertex_name": "user", "num_nodes": 2}},
         "edges": {
             "follows": {
                 "src": "user",
@@ -99,23 +100,6 @@ def test_edge_loading_with_attributes(tmp_data_dir):
     assert data.val_mask.tolist() == [False, True]
 
 
-
-def test_local_rank_partitioning(tmp_data_dir):
-    """Test correct partitioning based on local_rank."""
-    metadata = {
-        "data_dir": str(tmp_data_dir),
-        "nodes": {"user": {"vertex_name": "user"}},
-        "edges": {}
-    }
-    node_file = tmp_data_dir / "user_p2.csv"
-    pd.DataFrame([[0]]).to_csv(node_file, index=False, header=False)
-    
-    with patch('cudf.read_csv', pd.read_csv):
-        data = load_tg_data(metadata, local_rank=2, world_size=3, renumber=False)
-    
-    assert isinstance(data, Data)
-    assert torch.equal(data.node_ids, torch.tensor([0], dtype=torch.long))
-
 def test_empty_metadata_handling(tmp_data_dir):
     """Test handling of empty metadata."""
     metadata = {"data_dir": str(tmp_data_dir), "nodes": {}, "edges": {}}
@@ -127,7 +111,7 @@ def test_node_without_features_or_labels(tmp_data_dir):
     """Test node loading with only IDs."""
     metadata = {
         "data_dir": str(tmp_data_dir),
-        "nodes": {"user": {"vertex_name": "user"}},
+        "nodes": {"user": {"vertex_name": "user", "num_nodes": 2}},
         "edges": {}
     }
     node_file = tmp_data_dir / "user_p0.csv"
@@ -146,8 +130,8 @@ def test_hetero_edge_types(tmp_data_dir):
     metadata = {
         "data_dir": str(tmp_data_dir),
         "nodes": {
-            "user": {"vertex_name": "user"},
-            "item": {"vertex_name": "item"}
+            "user": {"vertex_name": "user", "num_nodes": 2},
+            "item": {"vertex_name": "item", "num_nodes": 2}
         },
         "edges": {
             "follows": {"src": "user", "dst": "user"},

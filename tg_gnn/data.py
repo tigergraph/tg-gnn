@@ -51,7 +51,6 @@ def load_tg_data(
     """
     # import after rmm re-initialization
     import cudf
-    world_size = torch.distributed.get_world_size()
     local_rank = get_local_rank()
     data_dir = metadata.get("data_dir", "")
     nodes_meta = metadata.get("nodes", {})
