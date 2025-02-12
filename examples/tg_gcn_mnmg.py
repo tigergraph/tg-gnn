@@ -41,11 +41,6 @@ from pylibwholegraph.torch.initialize import (
     init as wm_init,
     finalize as wm_finalize,
 )
-
-from datetime import timedelta
-from tg_gnn.tg_data import load_partitioned_data, export_tg_data
-from tg_gnn.tg_shuffle import shuffle_splits
-
 # Allow computation on objects that are larger than GPU memory
 # https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory
 os.environ["CUDF_SPILL"] = "1"
@@ -53,6 +48,19 @@ os.environ["CUDF_SPILL"] = "1"
 # Ensures that a CUDA context is not created on import of rapids.
 # Allows pytorch to create the context instead
 os.environ["RAPIDS_NO_INITIALIZE"] = "1"
+
+#### TG changes 1: import changes ####
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
+
+from datetime import timedelta
+from tg_gnn.data import load_tg_data, export_tg_data
+from tg_gnn.utils import redistribute_splits
 
 
 def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
@@ -274,8 +282,58 @@ def parse_args():
 
     return parser.parse_args()
 
+#### TG changes 2: load partitions ####
+# use load_tg_data to read the TG exported data
+# load_tg_data will returned Data or HeteroData object of PyG
+# using Data or HeteroData object you can create GraphStore and FeatureStore
+def load_partitions(
+    metadata: dict, 
+    wg_mem_type: str, 
+): 
+    from cugraph_pyg.data import GraphStore, WholeFeatureStore
 
+    graph_store = GraphStore(is_multi_gpu=True)
+    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+
+    # Load TG data and renumber the node ids
+    # renumbering is required so keep it True
+    data = load_tg_data(metadata, renumber=True)
+
+    split_idx = {}
+
+    # Load features
+   
+    feature_store["product", "x"] = data.x
+    feature_store["product", "y"] = data.y
+
+    # load splits
+    # Note: (train/val/test)_mask will available if present in TG attr and 
+    # the attr name is specified in metadata as split attribute
+    # make sure to have split attribute only 3 int values 
+    # (0 for train, 1 for valid and 2 for test)
+    split_idx["train"] = data.node_ids[data.train_mask] 
+    split_idx["val"] = data.node_ids[data.val_mask] 
+    split_idx["test"] = data.node_ids[data.test_mask] 
+
+    # redistribute split to create unifrom size
+    split_idx = redistribute_splits(split_idx)
+
+    # create graph store
+    graph_store[
+        ("product", "rel", "product"), 
+        "coo", 
+        False,
+        ( data.num_nodes, data.num_nodes)
+    ] =  data.edge_index
+
+
+    return (feature_store, graph_store), split_idx
+
+#### TG changes 3: define the metadata ####
 # Please update the metadata as per your Graph attributes and features
+# make sure to have all the required features in features list
+# and num of nodes for each node type
+# data_dir path is used to export the data from TG database
 metadata = {
     "nodes": {
         "product": {
@@ -326,6 +384,10 @@ if __name__ == "__main__":
         init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
         
         if global_rank == 0 and not args.skip_tg_write:
+            #### TG changes 4: Export TG data ####
+            # write data from TG database to tmp path
+            # need to call only once so global_rank 0 is used.
+
             # tg connection
             conn = TigerGraphConnection(
                 host=args.host,
@@ -334,19 +396,14 @@ if __name__ == "__main__":
                 password=args.password
             )
             conn.getToken(conn.createSecret())
-            # TODO: change world_size to local world size
-            # for MNMG we need only local world size to train
-            export_tg_data(conn, metadata, world_size, force=True)
+            export_tg_data(conn, metadata, force=True)
 
         dist.barrier()
-        data, split_idx = load_partitioned_data(
+        data, split_idx = load_partitions(
             metadata,
-            local_rank,
-            args.wg_mem_type,
-            world_size
+            args.wg_mem_type
         )
 
-        split_idx = shuffle_splits(split_idx, global_rank, world_size)
         dist.barrier()
 
         model = torch_geometric.nn.models.GCN(

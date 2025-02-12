@@ -1,18 +1,121 @@
+import time
+import os
 import torch
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
-import os
-from tg_gnn.tg_utils import timeit
 import logging
-
 logger = logging.getLogger(__name__)
+
+def timeit(func):
+    """
+    Decorator to measure the runtime of a function.
+    """
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        runtime = end_time - start_time
+        print(f"Function '{func.__name__}' executed in {runtime:.6f} seconds.")
+        return result
+
+    return wrapper
+
+def get_local_world_size() -> int:
+    try:
+        local_world_size = int(os.environ["LOCAL_WORLD_SIZE"])
+    except KeyError:
+        logger.warning(
+            "Since 'LOCAL_WORLD_SIZE' is not set."
+            "Calculating the local world size using torch.cuda.device_count()"
+        )
+        local_world_size = torch.cuda.device_count()
+    return local_world_size
+
+def get_local_rank() -> int:
+    # torchrun set the LOCAL RANK which we could use
+    local_rank_env = os.environ.get("LOCAL_RANK")
+    if local_rank_env is not None:
+        try:
+            return int(local_rank_env)
+        except ValueError:
+            raise ValueError("The LOCAL_RANK environment variable must be an integer.")
+
+    if dist.is_initialized():
+        global_rank = dist.get_rank()
+    else:
+        global_rank = 0
+
+    local_world_size = get_local_world_size()
+
+    if local_world_size == 0:
+        raise RuntimeError("No GPUs are available on this node.")
+
+    local_rank = global_rank % local_world_size
+    return local_rank
+
+@timeit
+def redistribute_splits(splits: dict) -> dict:
+    """
+    Gathers and redistributes data for train, val, and test splits across ranks.
+    This support redistributions of node indices of shape [n] and edge indices of shape [2,n]
+
+    Args:
+        splits (dict): A dictionary with keys "train", "val", "test", and tensors as values.
+    
+    Returns:
+        dict: A dictionary with redistributed splits for this rank.
+    """
+
+    world_size = dist.get_world_size()
+    local_rank = get_local_rank()
+    device = torch.device(f'cuda:{local_rank}')
+    torch.cuda.set_device(local_rank)
+    splits_shuffled = {}
+
+    logger.info("Redistributing splits across ranks...")
+    for key, local_indices in splits.items():
+        # Determine splits are of nodes types or edges
+        if local_indices.ndim == 1:
+            split_dim = gather_dim = 0
+            size_dim, log_type = 0, 'node'
+        elif local_indices.ndim == 2 and local_indices.size(0) == 2:
+            split_dim = gather_dim = 1
+            size_dim, log_type = 1, 'edge'
+        else:
+            raise ValueError(f"Invalid {key} tensor shape: {local_indices.shape}")
+
+        logger.info(f"Processing {log_type} indices for {key}...")
+
+        # Gather sizes from all ranks
+        local_size = torch.tensor([local_indices.size(size_dim)], dtype=torch.int64, device=device)
+        all_sizes = torch.zeros(world_size, dtype=torch.int64, device=device)
+        dist.all_gather_into_tensor(all_sizes, local_size)
+
+        # Create tensor buffers for gathering
+        if log_type == 'node':
+            all_indices_list = [torch.zeros((s.item(),), dtype=torch.int64, device=device) for s in all_sizes]
+        else:
+            all_indices_list = [torch.zeros((2, s.item()), dtype=torch.int64, device=device) for s in all_sizes]
+
+        # Collect indices from all ranks
+        dist.all_gather(all_indices_list, local_indices.to(device))
+        
+        # Combine and split indices
+        combined = torch.cat(all_indices_list, dim=gather_dim).cpu()
+        splits_shuffled[key] = torch.tensor_split(combined, world_size, dim=split_dim)[local_rank]
+
+        # Cleanup resources
+        del combined, local_size, all_sizes, all_indices_list
+        torch.cuda.empty_cache()
+        logger.info(f"Completed {log_type} {key} redistribution")
+
+    logger.info("All splits redistributed successfully")
+    return splits_shuffled
 
 @timeit
 def renumber_data(
     data: Data | HeteroData,
-    metadata: dict,
-    local_rank: int,
-    world_size: int
+    metadata: dict
 ) -> Data | HeteroData:
     """
     Renumbers node indices (and subsequently edge indices) across multiple ranks
@@ -27,8 +130,6 @@ def renumber_data(
                            "nodes": {"vertex_name": ..., ...}, ...},
                            "edges": {"rel_name":{"src": ..., "dst": ...,}, ...}
                          }
-        local_rank (int): The local GPU rank on this node.
-        world_size (int): The total number of ranks in the distributed setup.
 
     Returns:
         Data | HeteroData: The input data object with node and edge indices renumbered.
@@ -37,7 +138,8 @@ def renumber_data(
     # import after rmm re-initialization
     import cudf
     import cupy
-
+    world_size = torch.distributed.get_world_size()
+    local_rank = get_local_rank()
     device = torch.device(f"cuda:{local_rank}")
     torch.cuda.set_device(device)
 
@@ -46,8 +148,8 @@ def renumber_data(
     is_hetero = isinstance(data, HeteroData)
 
     # Process Nodes
-    logger.info("Renumbering the vertex ids...")
     for vertex_name, node_meta in metadata["nodes"].items():
+        logger.info(f"Renumbering the {vertex_name} ids...")
         if is_hetero and data[vertex_name] is None:
             logger.info(f"Data for '{vertex_name}' not found. Skipping...")
             continue
@@ -72,7 +174,7 @@ def renumber_data(
         ]
 
         node_offsets_cum = node_offsets.cumsum(0).cpu()
-        this_rank = dist.get_rank()  # Current rank (0-based)
+        this_rank = dist.get_rank() 
         local_offset = 0 if this_rank == 0 else int(node_offsets_cum[this_rank - 1])
 
         local_renumber_map = torch.stack(
@@ -104,10 +206,11 @@ def renumber_data(
             data.node_ids = local_renumber_map[0].cpu()
 
         del map_tensor, node_offsets, node_offsets_cum, current_num_nodes, local_renumber_map
-
+        logger.info(f"Renumbering the {vertex_name} ids completed successfully.")
+ 
     # Process/Renumber edges
-    logger.info("Mapping the edge indices with renumbered vertex ids...")
     for rel_name, edge_meta in metadata["edges"].items():
+        logger.info(f"Renumbering the {rel_name} indices...")
         src_name = edge_meta["src"]
         dst_name = edge_meta["dst"]
         rel = (src_name, rel_name, dst_name)
@@ -128,11 +231,19 @@ def renumber_data(
 
         # Retrieve the renumber maps for src and dst
         #   - map is a cudf DF: old_id => new_id
+        if src_name not in global_renumber_map:
+            logging.info(f"Renumber map not found for '{src_name}'. Skipping edge type '{rel}'.")
+            continue
+        
+        if dst_name not in global_renumber_map:
+            logging.info(f"Renumber map not found for '{dst_name}'. Skipping edge type '{rel}'.")
+            continue
+        
         src_map = global_renumber_map[src_name]["id"]
         dst_map = global_renumber_map[dst_name]["id"]
 
         if src_map is None or dst_map is None:
-            print(f"Renumber map not found for '{src_name}' or '{dst_name}'. Skipping edge type '{rel}'.")
+            logging.info(f"There is no data to do the mapping for either '{src_name}' or '{dst_name}'")
             continue
 
         # Renumber edges by looking up the new ID for each old ID
@@ -153,14 +264,10 @@ def renumber_data(
         else:
             data.edge_index = new_edge_index
 
-        # Clean up per-edge-type references
-        if src_name == dst_name:
-            del global_renumber_map[src_name]
-        else:
-            del global_renumber_map[src_name], global_renumber_map[dst_name]
         del src_map, dst_map, srcs, dsts
+        logger.info(f"Renumbering of {rel_name} indices completed successfully.")
 
+    del global_renumber_map
     torch.cuda.empty_cache()
 
     return data
-

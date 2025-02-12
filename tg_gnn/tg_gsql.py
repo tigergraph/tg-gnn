@@ -2,7 +2,7 @@ import argparse
 from pyTigerGraph import TigerGraphConnection
 import logging
 import re
-from tg_gnn.tg_utils import timeit
+from tg_gnn.utils import timeit
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def is_query_installed(
         return is_installed
 
 def install_query(
-    conn,
+    conn: TigerGraphConnection,
     query: str = None,
     file_path: str = None,
     replace: dict = None,
@@ -94,7 +94,9 @@ def install_query(
     return query_name
 
 @timeit
-def create_gsql_query(metadata, num_partitions):
+def create_gsql_query(
+    metadata: dict, 
+    num_partitions: int) -> str:
     data_dir = metadata["data_dir"]
     nodes = metadata["nodes"]
     edges = metadata["edges"]
@@ -204,7 +206,11 @@ def create_gsql_query(metadata, num_partitions):
     return query
 
 @timeit
-def install_and_run_query(conn, gsql_query, timeout=200000, force=True):
+def install_and_run_query(
+    conn: TigerGraphConnection, 
+    gsql_query: str, 
+    timeout: int = 200000, 
+    force: bool = True) -> None:
     try:
         logger.info("Installing the GSQL query...")
         query_name = install_query(conn, gsql_query, force=force)

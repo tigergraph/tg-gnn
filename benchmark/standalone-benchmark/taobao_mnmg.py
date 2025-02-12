@@ -30,7 +30,6 @@ from torch_geometric.datasets import Taobao
 from torch_geometric.nn import SAGEConv
 from torch_geometric.utils.convert import to_scipy_sparse_matrix
 from torch_geometric.data import HeteroData
-from pyTigerGraph import TigerGraphConnection
 
 from pylibwholegraph.torch.initialize import (
     init as wm_init,
@@ -38,8 +37,6 @@ from pylibwholegraph.torch.initialize import (
 )
 
 from sklearn.metrics import roc_auc_score
-from tg_gnn.tg_data import load_partitioned_data, export_tg_data, load_tg_data
-from tg_gnn.tg_shuffle import shuffle_splits
 
 # Allow computation on objects that are larger than GPU memory
 # https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory
@@ -158,6 +155,57 @@ class Model(torch.nn.Module):
         return self.decoder(z_dict["user"], z_dict["item"], edge_label_index)
 
 
+def write_edges(edge_index, path):
+    world_size = torch.distributed.get_world_size()
+
+    os.makedirs(path, exist_ok=True)
+    for (r, e) in enumerate(torch.tensor_split(edge_index, world_size, dim=1)):
+        rank_path = os.path.join(path, f"rank={r}.pt")
+        torch.save(
+            e.clone(),
+            rank_path,
+        )
+
+
+def preprocess_and_partition(data, edge_path, meta_path):
+    # Only interested in user/item edges
+    del data["category"]
+    del data["item", "category"]
+    del data["user", "item"].time
+    del data["user", "item"].behavior
+
+    print("Writing item->item edge partitions...")
+    item_item_edge_path = os.path.join(edge_path, "item_item")
+    write_edges(data["item", "item"].edge_index, item_item_edge_path)
+
+    print("Writing user->item edge partitions...")
+    user_item_edge_path = os.path.join(edge_path, "user_item")
+    write_edges(data["user", "item"].edge_index, user_item_edge_path)
+
+    print("Writing metadata...")
+    meta = {
+        "num_nodes": {
+            "item": data["item"].num_nodes,
+            "user": data["user"].num_nodes,
+        }
+    }
+    with open(meta_path, "w") as f:
+        json.dump(meta, f)
+
+
+def pre_transform(data):
+    # Compute item->item relationships:
+    print("Computing item->item relationships (this may take a very long time)...")
+    mat = to_scipy_sparse_matrix(data["user", "item"].edge_index).tocsr()
+    mat = mat[: data["user"].num_nodes, : data["item"].num_nodes]
+    comat = mat.T @ mat
+    comat.setdiag(0)
+    comat = comat >= 3.0
+    comat = comat.tocoo()
+    row = torch.from_numpy(comat.row).to(torch.long)
+    col = torch.from_numpy(comat.col).to(torch.long)
+    data["item", "item"].edge_index = torch.stack([row, col], dim=0)
+    return data
 
 
 def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
@@ -192,6 +240,9 @@ def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
         (data["item"].num_nodes, data["item"].num_nodes),
     ] = data["item", "rev_to", "item"].edge_index
 
+    feature_store["item", "x", None] = data["item"].x
+    feature_store["user", "x", None] = data["user"].x
+
     out = (
         (feature_store, graph_store),
         data["user", "to", "item"].edge_label_index,
@@ -201,15 +252,35 @@ def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
     return out
 
 
-def load_partitioned_data(meta, wg_mem_type):
+def load_partitions(edge_path, meta_path, wg_mem_type):
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
-    data = load_tg_data(meta, rank, world_size, renumber=True)
-    print(data)
-    data["user"].num_nodes = meta["nodes"]["user"]["num_nodes"]
-    data["item"].num_nodes = meta["nodes"]["item"]["num_nodes"]
-    print(data)
-    # adding reverse edge index 
+    data = HeteroData()
+
+    # Load metadata
+    print("Loading metadata...")
+    with open(meta_path, "r") as f:
+        meta = json.load(f)
+
+    data["user"].num_nodes = meta["num_nodes"]["user"]
+    data["item"].num_nodes = meta["num_nodes"]["item"]
+
+    data["user"].x = torch.tensor_split(
+        torch.arange(data["user"].num_nodes), world_size
+    )[rank]
+
+    data["item"].x = torch.tensor_split(
+        torch.arange(data["item"].num_nodes), world_size
+    )[rank]
+
+    # T.ToUndirected() will not work here because we are working with
+    # partitioned data.  The number of nodes will not match.
+
+    print("Loading item->item edge index...")
+    data["item", "to", "item"].edge_index = torch.load(
+        os.path.join(edge_path, "item_item", f"rank={rank}.pt"),
+        weights_only=True,
+    )
     data["item", "rev_to", "item"].edge_index = torch.stack(
         [
             data["item", "to", "item"].edge_index[1],
@@ -217,13 +288,17 @@ def load_partitioned_data(meta, wg_mem_type):
         ]
     )
 
+    print("Loading user->item edge index...")
+    data["user", "to", "item"].edge_index = torch.load(
+        os.path.join(edge_path, "user_item", f"rank={rank}.pt"),
+        weights_only=True,
+    )
     data["item", "rev_to", "user"].edge_index = torch.stack(
         [
             data["user", "to", "item"].edge_index[1],
             data["user", "to", "item"].edge_index[0],
         ]
     )
-    print(data)
 
     # Generate data splits here
     print("Splitting data...")
@@ -253,9 +328,12 @@ def train(model, optimizer, loader):
     model.train()
 
     total_loss = total_examples = 0
-    for batch in loader:
+    for i, batch in enumerate(loader):
         batch = batch.to(rank)
         optimizer.zero_grad()
+
+        if i % 10 == 0 and rank == 0:
+            print(f"iter {i}")
 
         pred = model(
             batch.x_dict,
@@ -280,7 +358,7 @@ def test(model, loader):
 
     model.eval()
     preds, targets = [], []
-    for batch in loader:
+    for i, batch in enumerate(loader):
         batch = batch.to(rank)
 
         pred = (
@@ -303,27 +381,6 @@ def test(model, loader):
 
     return roc_auc_score(target, pred)
 
-metadata = {
-    "nodes": {
-        "item": {
-            "num_nodes": 4161138,
-        },
-        "user": {
-            "num_nodes": 987991
-        }
-    }, 
-    "edges": {
-        "item_to_item": {
-            "src": "item",
-            "dst": "item"
-        },
-        "user_to_item": {
-            "src": "user",
-            "dst": "item"
-        }
-    },
-    "data_dir": "/data/taobao",
-}
 
 if __name__ == "__main__":
     if "LOCAL_RANK" not in os.environ:
@@ -337,13 +394,9 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_root", type=str, default="datasets")
     parser.add_argument("--skip_partition", action="store_true")
     parser.add_argument("--wg_mem_type", type=str, default="distributed")
-    parser.add_argument("-g", "--graph", default="taobao")
-    parser.add_argument("--host", default="http://172.17.0.3")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-
     args = parser.parse_args()
 
+    dataset_name = "taobao"
 
     torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
     world_size = torch.distributed.get_world_size()
@@ -370,35 +423,40 @@ if __name__ == "__main__":
 
     init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
 
-  
-    if global_rank == 0 and not args.skip_partition:
-        # tg connection
-        conn = TigerGraphConnection(
-            host=args.host,
-            graphname=args.graph,
-            username=args.username,
-            password=args.password
-        )
-        conn.getToken(conn.createSecret())
-        # TODO: change world_size to local world size
-        # for MNMG we need only local world size to train
-        export_tg_data(conn, metadata, world_size, force=True)
+    # Split the data
+    edge_path = os.path.join(args.dataset_root, dataset_name + "_eix_part")
+    feature_path = os.path.join(args.dataset_root, dataset_name + "_fea_part")
+    label_path = os.path.join(args.dataset_root, dataset_name + "_label_part")
+    meta_path = os.path.join(args.dataset_root, dataset_name + "_meta.json")
 
+    if not args.skip_partition and global_rank == 0:
+        print("Partitioning data...")
+
+        dataset = Taobao(args.dataset_root, pre_transform=pre_transform)
+        data = dataset[0]
+
+        preprocess_and_partition(
+            data,
+            edge_path=edge_path,
+            meta_path=meta_path,
+        )
+
+        print("Data partitioning complete!")
 
     torch.distributed.barrier()
-    data_dict, meta = load_partitioned_data(metadata, args.wg_mem_type)
+    data_dict, meta = load_partitions(edge_path, meta_path, args.wg_mem_type)
     torch.distributed.barrier()
 
     from cugraph_pyg.loader import LinkNeighborLoader
 
-    def create_loader(data_l, shuffle=False):
+    def create_loader(data_l):
         return LinkNeighborLoader(
             data=data_l[0],
             edge_label_index=data_l[1],
             edge_label=data_l[2],
             neg_sampling="binary" if data_l[2] is None else None,
             batch_size=args.batch_size,
-            shuffle=shuffle,
+            shuffle=True,
             drop_last=True,
             num_neighbors={
                 ("user", "to", "item"): [8, 4],
@@ -406,18 +464,24 @@ if __name__ == "__main__":
                 ("item", "to", "item"): [8, 4],
                 ("item", "rev_to", "item"): [8, 4],
             },
+            local_seeds_per_call=16384,
         )
 
     print("Creating train loader...")
     train_loader = create_loader(
         data_dict["train"],
-        shuffle=True,
     )
+    print(f"Created train loader on rank {global_rank}")
+
+    torch.distributed.barrier()
 
     print("Creating validation loader...")
     val_loader = create_loader(
         data_dict["val"],
     )
+    print(f"Created validation loader on rank {global_rank}")
+
+    torch.distributed.barrier()
 
     model = Model(
         num_users=meta["num_nodes"]["user"],
@@ -425,6 +489,7 @@ if __name__ == "__main__":
         hidden_channels=64,
         out_channels=64,
     ).to(local_rank)
+    print(f"Created model on rank {global_rank}")
 
     # Initialize lazy modules
     # FIXME DO NOT DO THIS!!!!  Use set parameters
@@ -436,14 +501,15 @@ if __name__ == "__main__":
             batch["user", "item"].edge_label_index,
         )
         break
+    print(f"Initialized model on rank {global_rank}")
 
     model = DistributedDataParallel(model, device_ids=[local_rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     best_val_auc = 0
-    for epoch in range(1, args.epochs):
+    for epoch in range(1, args.epochs + 1):
         print("Train")
-        loss = train(model, train_loader)
+        loss = train(model, optimizer, train_loader)
 
         if global_rank == 0:
             print("Val")
@@ -454,12 +520,10 @@ if __name__ == "__main__":
             print(f"Epoch: {epoch:02d}, Loss: {loss:4f}, Val AUC: {val_auc:.4f}")
 
     del train_loader
-    del eval_loader
+    del val_loader
     gc.collect()
     print("Creating test loader...")
-    test_loader = create_loader(
-        data_dict["test"],
-    )
+    test_loader = create_loader(data_dict["test"])
 
     if global_rank == 0:
         print("Test")

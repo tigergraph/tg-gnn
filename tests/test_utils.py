@@ -2,7 +2,7 @@ import pytest
 from unittest import mock
 import torch
 from torch_geometric.data import Data, HeteroData
-from tg_gnn.tg_renumber import renumber_data
+from tg_gnn.utils import renumber_data
 import torch.distributed as dist
 
 def run_homogeneous_test(rank, world_size):
@@ -30,7 +30,7 @@ def run_homogeneous_test(rank, world_size):
     }
 
     # Apply renumbering
-    renumbered_data = renumber_data(data, metadata, rank, world_size)
+    renumbered_data = renumber_data(data, metadata)
 
     expected_node_ids = torch.tensor([0, 1] if rank == 0 else [2, 3], dtype=torch.int64)
     assert torch.equal(renumbered_data.node_ids.cpu(), expected_node_ids), f"Node IDs mismatch on rank {rank}"
@@ -77,7 +77,7 @@ def run_heterogeneous_test(rank, world_size):
     }
 
     # Apply renumbering
-    renumbered_data = renumber_data(data, metadata, rank, world_size)
+    renumbered_data = renumber_data(data, metadata)
 
     # Check node IDs
     expected_user_ids = torch.tensor([0, 1] if rank == 0 else [2, 3], dtype=torch.int64)

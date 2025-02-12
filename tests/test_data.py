@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 from torch_geometric.data import Data, HeteroData
 from unittest.mock import patch, MagicMock
-from tg_gnn.tg_data import load_tg_data
+from tg_gnn.data import load_tg_data
 
 @pytest.fixture
 def tmp_data_dir(tmpdir):
@@ -31,7 +31,7 @@ def test_load_single_node_with_features_labels_splits(tmp_data_dir):
     df.to_csv(node_file, index=False, header=False)
     
     with patch('cudf.read_csv', pd.read_csv):
-        data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
+        data = load_tg_data(metadata, renumber=False)
     
     assert isinstance(data, Data)
     assert torch.equal(data.node_ids, torch.tensor([0, 1], dtype=torch.long))
@@ -89,7 +89,7 @@ def test_edge_loading_with_attributes(tmp_data_dir):
     df.to_csv(edge_file, index=False, header=False)
     
     with patch('cudf.read_csv', pd.read_csv):
-        data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
+        data = load_tg_data(metadata, renumber=False)
     
     assert isinstance(data, Data)
     assert data.edge_index.shape == (2, 2)
@@ -119,7 +119,7 @@ def test_local_rank_partitioning(tmp_data_dir):
 def test_empty_metadata_handling(tmp_data_dir):
     """Test handling of empty metadata."""
     metadata = {"data_dir": str(tmp_data_dir), "nodes": {}, "edges": {}}
-    data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
+    data = load_tg_data(metadata, renumber=False)
     assert isinstance(data, Data)
     assert len(data) == 0
 
@@ -134,7 +134,7 @@ def test_node_without_features_or_labels(tmp_data_dir):
     pd.DataFrame([[0]]).to_csv(node_file, index=False, header=False)
     
     with patch('cudf.read_csv', pd.read_csv):
-        data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
+        data = load_tg_data(metadata, renumber=False)
     assert isinstance(data, Data)
     assert hasattr(data, 'node_ids')
     assert data.x is None
@@ -164,7 +164,7 @@ def test_hetero_edge_types(tmp_data_dir):
     pd.DataFrame([[0, 1]]).to_csv(buys_file, index=False, header=False)
     
     with patch('cudf.read_csv', pd.read_csv):
-        data = load_tg_data(metadata, local_rank=0, world_size=1, renumber=False)
+        data = load_tg_data(metadata, renumber=False)
     
     assert isinstance(data, HeteroData)
     assert ('user', 'follows', 'user') in data.edge_types
