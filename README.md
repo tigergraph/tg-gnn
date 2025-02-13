@@ -32,9 +32,10 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
     git checkout taobao-add-timing
     cd python/cugraph-pyg
     pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
+    ```
 ---
 
-## Changes Required to Run a GCN Model on Any TigerGraph Graph
+## Changes Required to Run example GCN Model code on Any TigerGraph Graph
 
 To integrate your TigerGraph graph with the GCN model, a few schema updates and metadata configurations are required.
 
@@ -110,18 +111,57 @@ torchrun \
     --rdzv-id 4RANDOM \
     --rdzv-backend c10d \
     --rdzv-endpoint localhost:29500 \
-    tg_gcn_mnmg.py \
+    examples/tg_gcn_mnmg.py \
     -g <tg-graph-name> \
     --host <tg-host-ip> \
     -u <tg-username> \
-    -p <tg-password>
-    --port <tg-port>
+    -p <tg-password> \
+    --restppPort <tg-port> \
+    -s False 
 ```
 
 - `--nnodes` **and** `--nproc-per-node`: Control the number of nodes and GPUs per node for multi-GPU training.  
 - `--rdzv-id`, `--rdzv-backend`, `--rdzv-endpoint`: Arguments for PyTorch’s distributed runtime.  
 - `-g` (`--graph`): Name of the TigerGraph graph to be used.  
-- `--host`, `--port`, `-u`, `-p`: Host IP, port, username, and password for connecting to your TigerGraph instance.
+- `--host`, `--restppPort`, `-u`, `-p`: Host IP, port for rest++ queries, username, and password for connecting to your TigerGraph instance.
+
+
+## Expected Result from running above example
+
+```
+Beginning training...
+Epoch: 0, Iteration: 0, Loss: tensor(3.8706, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 0, Iteration: 10, Loss: tensor(0.8285, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 0, Iteration: 20, Loss: tensor(0.7156, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 0, Iteration: 30, Loss: tensor(0.6421, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 0, Iteration: 40, Loss: tensor(0.6386, device='cuda:0', grad_fn=<NllLossBackward0>)
+Average Training Iteration Time: 0.013461819716862269 s/iter
+Validation Accuracy: 86.8490%
+Epoch: 1, Iteration: 0, Loss: tensor(0.5380, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 1, Iteration: 10, Loss: tensor(0.5128, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 1, Iteration: 20, Loss: tensor(0.4820, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 1, Iteration: 30, Loss: tensor(0.5696, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 1, Iteration: 40, Loss: tensor(0.5411, device='cuda:0', grad_fn=<NllLossBackward0>)
+Average Training Iteration Time: 0.01327134030205863 s/iter
+Validation Accuracy: 87.7387%
+Epoch: 2, Iteration: 0, Loss: tensor(0.5010, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 2, Iteration: 10, Loss: tensor(0.4989, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 2, Iteration: 20, Loss: tensor(0.4815, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 2, Iteration: 30, Loss: tensor(0.4908, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 2, Iteration: 40, Loss: tensor(0.4771, device='cuda:0', grad_fn=<NllLossBackward0>)
+Average Training Iteration Time: 0.013151185853140695 s/iter
+Validation Accuracy: 87.6302%
+Epoch: 3, Iteration: 0, Loss: tensor(0.4845, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 3, Iteration: 10, Loss: tensor(0.4576, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 3, Iteration: 20, Loss: tensor(0.4722, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 3, Iteration: 30, Loss: tensor(0.5193, device='cuda:0', grad_fn=<NllLossBackward0>)
+Epoch: 3, Iteration: 40, Loss: tensor(0.4854, device='cuda:0', grad_fn=<NllLossBackward0>)
+Average Training Iteration Time: 0.013145617076328822 s/iter
+Validation Accuracy: 88.0100%
+Test Accuracy: 73.2040%
+Total Program Runtime (total_time) = 118.15 seconds
+total_time - prep_time = 28.16000000000001 seconds
+```
 
 ---
 
