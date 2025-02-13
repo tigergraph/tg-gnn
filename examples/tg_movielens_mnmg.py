@@ -288,18 +288,23 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--epochs", type=int, default=16)
-    parser.add_argument("--dataset_root", type=str, default="datasets")
-    parser.add_argument("--skip_partition", action="store_true")
     parser.add_argument("--wg_mem_type", type=str, default="distributed")
-    parser.add_argument("-g", "--graph", default="movielens")
-    parser.add_argument("--host", default="http://172.17.0.3")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-    parser.add_argument("--skip_tg_export", "-s", type=bool, default=False)
+    parser.add_argument("-g", "--graph", default="movielens", 
+        help="The default graph for running queries.")
+    parser.add_argument("--host", default="http://172.17.0.3", 
+        help=("The host name or IP address of the TigerGraph server."
+            "Make sure to include the protocol (http:// or https://)."
+            "If certPath is None and the protocol is https, a self-signed certificate will be used.")
+    )
+    parser.add_argument("--restppPort", default="9000", help="The port for REST++ queries.")
+    parser.add_argument("--username", "-u", default="tigergraph", 
+        help="The username on the TigerGraph server.")
+    parser.add_argument("--password", "-p", default="tigergraph", 
+        help="The password for that user.")
+    parser.add_argument("--skip_tg_export", "-s", type=bool, default=False,
+        help="Wheather to skip the data export from TG. Default value (False) will fetch the data.")
 
     args = parser.parse_args()
-
-    dataset_name = "movielens"
 
     torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
     world_size = torch.distributed.get_world_size()
@@ -335,6 +340,7 @@ if __name__ == "__main__":
         # tg connection
         conn = TigerGraphConnection(
             host=args.host,
+            restppPort=args.restppPort,
             graphname=args.graph,
             username=args.username,
             password=args.password

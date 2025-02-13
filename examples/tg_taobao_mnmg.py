@@ -334,9 +334,11 @@ def test(model, loader):
 metadata = {
     "nodes": {
         "item": {
+            "vertex_name": "item",
             "num_nodes": 4161138,
         },
         "user": {
+            "vertex_name": "user",
             "num_nodes": 987991
         }
     }, 
@@ -363,11 +365,20 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--batch_size", type=int, default=2048)
     parser.add_argument("--wg_mem_type", type=str, default="distributed")
-    parser.add_argument("-g", "--graph", default="taobao")
-    parser.add_argument("--host", default="http://172.17.0.3")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-    parser.add_argument("--skip_tg_export", "-s", type=bool, default=False)
+    parser.add_argument("-g", "--graph", default="taobao", 
+        help="The default graph for running queries.")
+    parser.add_argument("--host", default="http://172.17.0.3", 
+        help=("The host name or IP address of the TigerGraph server."
+            "Make sure to include the protocol (http:// or https://)."
+            "If certPath is None and the protocol is https, a self-signed certificate will be used.")
+    )
+    parser.add_argument("--restppPort", default="9000", help="The port for REST++ queries.")
+    parser.add_argument("--username", "-u", default="tigergraph", 
+        help="The username on the TigerGraph server.")
+    parser.add_argument("--password", "-p", default="tigergraph", 
+        help="The password for that user.")
+    parser.add_argument("--skip_tg_export", "-s", type=bool, default=False,
+        help="Wheather to skip the data export from TG. Default value (False) will fetch the data.")
 
     args = parser.parse_args()
 
@@ -406,6 +417,7 @@ if __name__ == "__main__":
         # tg connection
         conn = TigerGraphConnection(
             host=args.host,
+            restppPort=args.restppPort,
             graphname=args.graph,
             username=args.username,
             password=args.password

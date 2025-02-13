@@ -25,11 +25,28 @@ classifiers = [
 
 # If you have direct dependencies, list them here:
 dependencies = [
+    "pyTigerGraph",
+    "cugraph-cu12==25.4.*,>=0.0.0a0",
+    "pylibwholegraph-cu12==25.4.*,>=0.0.0a0",
+    "cugraph-pyg-cu12==25.4.*,>=0.0.0a0",
+    "cudf-cu12==25.4.*,>=0.0.0a0",
+    "numba>=0.57",
+    "numpy>=1.23,<3.0a0",
+    "pandas",
+    "tensordict>=0.1.2",
+    "torch-geometric>=2.5,<2.7",
+    "torch>=2.3",
+    "scikit-learn",
+    "pytest",
+    "ogb"
+
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=6.2.0"
+test = [
+    "ogb",
+    "pytest>=6.2.0",
+    "scikit-learn"
 ]
 
 [tool.setuptools.packages.find]

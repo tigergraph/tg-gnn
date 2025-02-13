@@ -273,11 +273,20 @@ def parse_args():
     parser.add_argument("--in_memory", action="store_true", default=True)
     parser.add_argument("--seeds_per_call", type=int, default=-1)
     parser.add_argument("--tempdir_root", type=str, default="/tmp")
-    parser.add_argument("-g", "--graph", default="ogbn_products_zetta")
-    parser.add_argument("--host", default="http://172.17.0.3")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-    parser.add_argument("--skip_tg_write", "-s", type=bool, default=False)
+    parser.add_argument("-g", "--graph", default="ogbn_products_zetta", 
+        help="The default graph for running queries.")
+    parser.add_argument("--host", default="http://172.17.0.3", 
+        help=("The host name or IP address of the TigerGraph server."
+            "Make sure to include the protocol (http:// or https://)."
+            "If certPath is None and the protocol is https, a self-signed certificate will be used.")
+    )
+    parser.add_argument("--restppPort", default="9000", help="The port for REST++ queries.")
+    parser.add_argument("--username", "-u", default="tigergraph", 
+        help="The username on the TigerGraph server.")
+    parser.add_argument("--password", "-p", default="tigergraph", 
+        help="The password for that user.")
+    parser.add_argument("--skip_tg_export", "-s", type=bool, default=False,
+        help="Wheather to skip the data export from TG. Default value (False) will fetch the data.")
 
 
     return parser.parse_args()
@@ -309,8 +318,9 @@ def load_partitions(
     # load splits
     # Note: (train/val/test)_mask will available if present in TG attr and 
     # the attr name is specified in metadata as split attribute
-    # make sure to have split attribute only 3 int values 
+    # make sure to treat split attribute as enum of 3 int values 
     # (0 for train, 1 for valid and 2 for test)
+    # other values are simply ignored
     split_idx["train"] = data.node_ids[data.train_mask] 
     split_idx["val"] = data.node_ids[data.val_mask] 
     split_idx["test"] = data.node_ids[data.test_mask] 
@@ -383,7 +393,7 @@ if __name__ == "__main__":
 
         init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
         
-        if global_rank == 0 and not args.skip_tg_write:
+        if global_rank == 0 and not args.skip_tg_export:
             #### TG changes 4: Export TG data ####
             # write data from TG database to tmp path
             # need to call only once so global_rank 0 is used.
@@ -391,6 +401,7 @@ if __name__ == "__main__":
             # tg connection
             conn = TigerGraphConnection(
                 host=args.host,
+                restppPort=args.restppPort,
                 graphname=args.graph,
                 username=args.username,
                 password=args.password

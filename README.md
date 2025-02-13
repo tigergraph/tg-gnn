@@ -19,16 +19,19 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
    ```bash
    source venv/bin/activate
    ```
-3. **Install project dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. **Install tg-gnn project**
+3. **Install tg-gnn project**
     ```bash
     git clone https://github.com/tigergraph/tg-gnn.git
     cd tg-gnn
-    pip install .
+    pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
     ```
+4. **Fix some bugs which is not available yet in nightly build**
+    ```bash
+    git clone https://github.com/alexbarghi-nv/cugraph-gnn.git
+    cd cugraph-gnn
+    git checkout taobao-add-timing
+    cd python/cugraph-pyg
+    pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
 ---
 
 ## Changes Required to Run a GCN Model on Any TigerGraph Graph
@@ -107,17 +110,18 @@ torchrun \
     --rdzv-id 4RANDOM \
     --rdzv-backend c10d \
     --rdzv-endpoint localhost:29500 \
-    tg_gcn.py \
+    tg_gcn_mnmg.py \
     -g <tg-graph-name> \
     --host <tg-host-ip> \
     -u <tg-username> \
     -p <tg-password>
+    --port <tg-port>
 ```
 
 - `--nnodes` **and** `--nproc-per-node`: Control the number of nodes and GPUs per node for multi-GPU training.  
 - `--rdzv-id`, `--rdzv-backend`, `--rdzv-endpoint`: Arguments for PyTorch’s distributed runtime.  
 - `-g` (`--graph`): Name of the TigerGraph graph to be used.  
-- `--host`, `-u`, `-p`: Host IP, username, and password for connecting to your TigerGraph instance.
+- `--host`, `--port`, `-u`, `-p`: Host IP, port, username, and password for connecting to your TigerGraph instance.
 
 ---
 
