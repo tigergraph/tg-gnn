@@ -35,9 +35,9 @@ Create a graph in TigerGraph with the following schema structure:
 2. Ensure each CSV file has a **node ID**. For example:
    - `raw/node-feat.csv`: Add a node ID column (0 to n for each row) alongside the feature columns.
    - `raw/node-label.csv`: Add a node ID column (0 to n) alongside the label column.
-   - `split/train.csv`: Add a `split` column with value **1** for all rows (indicating training nodes).
-   - `split/valid.csv`: Add a `split` column with value **2** for all rows (indicating validation nodes).
-   - `split/test.csv`: Add a `split` column with value **3** for all rows (indicating test nodes).
+   - `split/train.csv`: Add a `split` column with value **0** for all rows (indicating training nodes).
+   - `split/valid.csv`: Add a `split` column with value **1** for all rows (indicating validation nodes).
+   - `split/test.csv`: Add a `split` column with value **2** for all rows (indicating test nodes).
    - `raw/edges.csv`: No change needed (already contains edge pairs).
 
 ### Step 3: Load the Data into TigerGraph
@@ -85,9 +85,9 @@ Create a graph in TigerGraph with the following schema structure:
      - **edges.csv**: no change required (already contains edge pairs).
    - `raw/node-label.npz` → parse into `node-label.csv` (also add node ID).
 3. Add split columns for train/valid/test:
-   - `split/time/train.csv`: add a `split` column with value **1**.  
-   - `split/time/valid.csv`: add a `split` column with value **2**.  
-   - `split/time/test.csv`: add a `split` column with value **3**.
+   - `split/time/train.csv`: add a `split` column with value **0**.  
+   - `split/time/valid.csv`: add a `split` column with value **1**.  
+   - `split/time/test.csv`: add a `split` column with value **2**.
 
 ### Step 3: Load the Data into TigerGraph
 
