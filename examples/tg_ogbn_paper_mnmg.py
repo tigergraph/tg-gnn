@@ -273,7 +273,7 @@ def parse_args():
     parser.add_argument("--in_memory", action="store_true", default=True)
     parser.add_argument("--seeds_per_call", type=int, default=-1)
     parser.add_argument("--tempdir_root", type=str, default="/tmp")
-    parser.add_argument("-g", "--graph", default="ogbn_products_zetta", 
+    parser.add_argument("-g", "--graph", default="ogbn_papers", 
         help="The default graph for running queries.")
     parser.add_argument("--host", default="http://172.17.0.3", 
         help=("The host name or IP address of the TigerGraph server."
@@ -312,8 +312,8 @@ def load_partitions(
 
     # Load features
    
-    feature_store["product", "x"] = data.x
-    feature_store["product", "y"] = data.y
+    feature_store["paper", "x"] = data.x
+    feature_store["paper", "y"] = data.y
 
     # load splits
     # Note: (train/val/test)_mask will available if present in TG attr and 
@@ -330,7 +330,7 @@ def load_partitions(
 
     # create graph store
     graph_store[
-        ("product", "rel", "product"), 
+        ("paper", "rel", "paper"), 
         "coo", 
         False,
         ( data.num_nodes, data.num_nodes)
@@ -346,14 +346,14 @@ def load_partitions(
 # data_dir path is used to export the data from TG database
 metadata = {
     "nodes": {
-        "product": {
-            "vertex_name": "product",
+        "paper": {
+            "vertex_name": "paper",
             "features_list": {
                 "embedding": "LIST"
             },
             "label": "node_label",
             "split": "train_val_test",
-            "num_nodes": 2449029,
+            "num_nodes": 111059956,
             "num_classes": 47,
             "num_features": 100,
         }
@@ -361,14 +361,14 @@ metadata = {
     "edges": {
         "rel": {
             "rel_name": "rel",
-            "src": "product",
-            "dst": "product"
+            "src": "paper",
+            "dst": "paper"
         }
     },
-    "data_dir": "/data/ogbn_product",
-    "num_classes": 47,
-    "num_features": 100, 
-    "num_nodes": 2449029 
+    "data_dir": "/data/ogbn_paper",
+    "num_classes": 172,
+    "num_features": 128, 
+    "num_nodes": 111059956 
 }
 
 

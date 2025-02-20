@@ -105,19 +105,8 @@ metadata = {
 Use the following command to run the GCN example. Make sure to replace the placeholders (`<tg-graph-name>`, `<tg-host-ip>`, `<tg-username>`, `<tg-password>`) with the correct values for your TigerGraph environment.
 
 ```bash
-torchrun \
-    --nnodes 1 \
-    --nproc-per-node 4 \
-    --rdzv-id 4RANDOM \
-    --rdzv-backend c10d \
-    --rdzv-endpoint localhost:29500 \
-    examples/tg_gcn_mnmg.py \
-    -g <tg-graph-name> \
-    --host <tg-host-ip> \
-    -u <tg-username> \
-    -p <tg-password> \
-    --restppPort <tg-port> \
-    -s False 
+torchrun --nnodes 1 --nproc-per-node 4 --rdzv-id 4RANDOM --rdzv-backend c10d --rdzv-endpoint localhost:29500 examples/tg_gcn_mnmg.py \
+    -g <tg-graph-name> --host <tg-host-ip> -u <tg-username> -p <tg-password> --restppPort <tg-port> -s False 
 ```
 
 - `--nnodes` **and** `--nproc-per-node`: Control the number of nodes and GPUs per node for multi-GPU training.  

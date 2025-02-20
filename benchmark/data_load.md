@@ -18,9 +18,9 @@ Create a graph in TigerGraph with the following schema structure:
   Attributes:
   ```plaintext
   "product": {
-      "embeddings/features": "LIST<Float>",  # to store the node features
-      "label": INT,
-      "split": INT  # stores the split enum (0: train, 1: valid, 2: test)
+      "embedding": "LIST<Float>",  # to store the node features
+      "node_label": INT,
+      "train_val_test": INT  # stores the split enum (0: train, 1: valid, 2: test)
   }
   ```
 - **Edge Type**: `rel`  
@@ -42,7 +42,7 @@ Create a graph in TigerGraph with the following schema structure:
 
 ### Step 3: Load the Data into TigerGraph
 
-Use the sample script (e.g., `ogbn_load.py`) or your own loading process to ingest CSV files into TigerGraph. Ensure your file paths and column separators match your CSV format. 
+Use the sample script (e.g., `benchmark/ogbn_dataload.py`) or your own loading process to ingest CSV files into TigerGraph. Ensure your file paths and column separators match your CSV format. 
 
 Below is an **example** load job snippet that inserts node features (assuming CSV format: `node_id | features`):
 
@@ -65,9 +65,9 @@ Create a graph in TigerGraph with the following schema structure:
   Attributes:
   ```plaintext
   "paper": {
-      "embeddings/features": "LIST<Float>",  # to store the node features
-      "label": INT,
-      "split": INT  # stores the split enum (0: train, 1: valid, 2: test)
+      "embedding": "LIST<Double>",  # to store the node features
+      "node_label": INT,
+      "train_val_test": INT  # stores the split enum (0: train, 1: valid, 2: test)
   }
   ```
 - **Edge Type**: `cites`  
@@ -79,7 +79,7 @@ Create a graph in TigerGraph with the following schema structure:
 ### Step 2: Prepare the Data
 
 1. **Download the papers data** (e.g., from the OGB repository).
-2. Convert `.npz` files to CSV if necessary:
+2. Convert `.npz` files to CSV:
    - `raw/data.npz` → parse into `node-feat.csv` and `edges.csv`  
      - **node-feat.csv**: add a node ID column (0 to n).  
      - **edges.csv**: no change required (already contains edge pairs).
