@@ -354,8 +354,8 @@ metadata = {
             "label": "node_label",
             "split": "train_val_test",
             "num_nodes": 111059956,
-            "num_classes": 47,
-            "num_features": 100,
+            "num_classes": 172,
+            "num_features": 128,
         }
     }, 
     "edges": {
