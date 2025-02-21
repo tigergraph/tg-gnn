@@ -105,14 +105,15 @@ metadata = {
 Use the following command to run the GCN example. Make sure to replace the placeholders (`<tg-graph-name>`, `<tg-host-ip>`, `<tg-username>`, `<tg-password>`) with the correct values for your TigerGraph environment.
 
 ```bash
-torchrun --nnodes 1 --nproc-per-node 4 --rdzv-id 4RANDOM --rdzv-backend c10d --rdzv-endpoint localhost:29500 examples/tg_gcn_mnmg.py \
-    -g <tg-graph-name> --host <tg-host-ip> -u <tg-username> -p <tg-password> --restppPort <tg-port> -s False 
+torchrun --nnodes 1 --nproc-per-node 4 --rdzv-id 4RANDOM --rdzv-backend c10d --rdzv-endpoint localhost:29500 examples/tg_ogbn_products_mnmg.py \
+    -g <tg-graph-name> --host <tg-host-ip> -u <tg-username> -p <tg-password> --restppPort <tg-port>
 ```
 
 - `--nnodes` **and** `--nproc-per-node`: Control the number of nodes and GPUs per node for multi-GPU training.  
 - `--rdzv-id`, `--rdzv-backend`, `--rdzv-endpoint`: Arguments for PyTorch’s distributed runtime.  
 - `-g` (`--graph`): Name of the TigerGraph graph to be used.  
 - `--host`, `--restppPort`, `-u`, `-p`: Host IP, port for rest++ queries, username, and password for connecting to your TigerGraph instance.
+- `--skip_tg_export`, `-s`: Control data exporting from TigerGraph, omit the argument to perform data exporting step
 
 
 ## Expected Result from running above example
