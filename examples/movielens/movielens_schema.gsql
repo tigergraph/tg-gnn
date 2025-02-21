@@ -1,0 +1,4 @@
+CREATE VERTEX movie(id UINT primary key, title STRING, genres STRING, movie_embedding LIST<DOUBLE>) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE VERTEX user(id UINT primary key) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE DIRECTED EDGE rates(FROM user, TO movie, rating FLOAT, split INT)
+CREATE GRAPH movielens(movie, user, rates)

@@ -1,0 +1,3 @@
+CREATE VERTEX product(id UINT primary key, embedding LIST<DOUBLE>, node_label INT, train_val_test INT) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE DIRECTED EDGE rel(FROM product, TO product)
+CREATE GRAPH ogbn_products(product, rel)

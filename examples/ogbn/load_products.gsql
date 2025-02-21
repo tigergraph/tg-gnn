@@ -1,0 +1,17 @@
+use graph ogbn_products
+
+create loading job load_products {
+   DEFINE FILENAME f1="products/raw/node-feat-with-id.csv";
+   DEFINE FILENAME f2="products/raw/node-label-with-id.csv";
+   DEFINE FILENAME f3="products/raw/edge.csv";
+   DEFINE FILENAME f4="products/split/sales_ranking/train-with-split.csv";
+   DEFINE FILENAME f5="products/split/sales_ranking/valid-with-split.csv";
+   DEFINE FILENAME f6="products/split/sales_ranking/test-with-split.csv";
+   LOAD f1 TO VERTEX product VALUES($0, SPLIT($1, ","), _, _) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f2 TO VERTEX product VALUES($0, _, $1, _) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f3 TO EDGE rel VALUES($0, $1) USING SEPARATOR=",", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f4 TO VERTEX product VALUES($0, _, _, $1) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f5 TO VERTEX product VALUES($0, _, _, $1) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f6 TO VERTEX product VALUES($0, _, _, $1) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+}
+run loading job load_products

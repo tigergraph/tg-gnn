@@ -1,0 +1,12 @@
+use graph movielens
+
+create loading job load_movielens {
+   DEFINE FILENAME f1="ml-latest-small/movies.csv";
+   DEFINE FILENAME f2="ml-latest-small/embedding.csv";
+   DEFINE FILENAME f3="ml-latest-small/ratings-with-split.csv";
+   LOAD f1 TO VERTEX movie VALUES($0, $1, $2, _) USING SEPARATOR=",", HEADER="true", EOL="\n", QUOTE="DOUBLE";
+   LOAD f2 TO VERTEX movie VALUES($0, _, _, SPLIT($1, ",")) USING SEPARATOR="|", HEADER="true", EOL="\n", QUOTE="DOUBLE";
+   LOAD f3 TO VERTEX user VALUES($0) USING SEPARATOR=",", HEADER="true", EOL="\n", QUOTE="DOUBLE";
+   LOAD f3 TO EDGE rates VALUES($0, $1, $2, $4) USING SEPARATOR=",", HEADER="true", EOL="\n", QUOTE="DOUBLE";
+}
+run loading job load_movielens
