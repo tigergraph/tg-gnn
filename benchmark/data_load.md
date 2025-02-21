@@ -18,9 +18,9 @@ Create a graph in TigerGraph with the following schema structure:
   Attributes:
   ```plaintext
   "product": {
-      "embeddings/features": "LIST<Float>",  # to store the node features
-      "label": INT,
-      "split": INT  # stores the split enum (0: train, 1: valid, 2: test)
+      "embedding": "LIST<Float>",  # to store the node features
+      "node_label": INT,
+      "train_val_test": INT  # stores the split enum (0: train, 1: valid, 2: test)
   }
   ```
 - **Edge Type**: `rel`  
@@ -35,14 +35,14 @@ Create a graph in TigerGraph with the following schema structure:
 2. Ensure each CSV file has a **node ID**. For example:
    - `raw/node-feat.csv`: Add a node ID column (0 to n for each row) alongside the feature columns.
    - `raw/node-label.csv`: Add a node ID column (0 to n) alongside the label column.
-   - `split/train.csv`: Add a `split` column with value **1** for all rows (indicating training nodes).
-   - `split/valid.csv`: Add a `split` column with value **2** for all rows (indicating validation nodes).
-   - `split/test.csv`: Add a `split` column with value **3** for all rows (indicating test nodes).
+   - `split/train.csv`: Add a `split` column with value **0** for all rows (indicating training nodes).
+   - `split/valid.csv`: Add a `split` column with value **1** for all rows (indicating validation nodes).
+   - `split/test.csv`: Add a `split` column with value **2** for all rows (indicating test nodes).
    - `raw/edges.csv`: No change needed (already contains edge pairs).
 
 ### Step 3: Load the Data into TigerGraph
 
-Use the sample script (e.g., `ogbn_load.py`) or your own loading process to ingest CSV files into TigerGraph. Ensure your file paths and column separators match your CSV format. 
+Use the sample script (e.g., `benchmark/ogbn_dataload.py`) or your own loading process to ingest CSV files into TigerGraph. Ensure your file paths and column separators match your CSV format. 
 
 Below is an **example** load job snippet that inserts node features (assuming CSV format: `node_id | features`):
 
@@ -65,9 +65,9 @@ Create a graph in TigerGraph with the following schema structure:
   Attributes:
   ```plaintext
   "paper": {
-      "embeddings/features": "LIST<Float>",  # to store the node features
-      "label": INT,
-      "split": INT  # stores the split enum (0: train, 1: valid, 2: test)
+      "embedding": "LIST<Double>",  # to store the node features
+      "node_label": INT,
+      "train_val_test": INT  # stores the split enum (0: train, 1: valid, 2: test)
   }
   ```
 - **Edge Type**: `cites`  
@@ -79,15 +79,15 @@ Create a graph in TigerGraph with the following schema structure:
 ### Step 2: Prepare the Data
 
 1. **Download the papers data** (e.g., from the OGB repository).
-2. Convert `.npz` files to CSV if necessary:
+2. Convert `.npz` files to CSV:
    - `raw/data.npz` → parse into `node-feat.csv` and `edges.csv`  
      - **node-feat.csv**: add a node ID column (0 to n).  
      - **edges.csv**: no change required (already contains edge pairs).
    - `raw/node-label.npz` → parse into `node-label.csv` (also add node ID).
 3. Add split columns for train/valid/test:
-   - `split/time/train.csv`: add a `split` column with value **1**.  
-   - `split/time/valid.csv`: add a `split` column with value **2**.  
-   - `split/time/test.csv`: add a `split` column with value **3**.
+   - `split/time/train.csv`: add a `split` column with value **0**.  
+   - `split/time/valid.csv`: add a `split` column with value **1**.  
+   - `split/time/test.csv`: add a `split` column with value **2**.
 
 ### Step 3: Load the Data into TigerGraph
 

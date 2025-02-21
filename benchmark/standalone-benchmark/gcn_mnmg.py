@@ -20,14 +20,15 @@ import warnings
 import tempfile
 import time
 import json
+from datetime import timedelta
+
 
 
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+from ogb.nodeproppred import PygNodePropPredDataset
 from torch.nn.parallel import DistributedDataParallel
-from pyTigerGraph import TigerGraphConnection
-
 
 import torch_geometric
 
@@ -42,10 +43,6 @@ from pylibwholegraph.torch.initialize import (
     finalize as wm_finalize,
 )
 
-from datetime import timedelta
-from tg_gnn.tg_data import load_partitioned_data, export_tg_data
-from tg_gnn.tg_shuffle import shuffle_splits
-
 # Allow computation on objects that are larger than GPU memory
 # https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory
 os.environ["CUDF_SPILL"] = "1"
@@ -56,17 +53,14 @@ os.environ["RAPIDS_NO_INITIALIZE"] = "1"
 
 
 def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
-    torch.cuda.set_device(local_rank)
-
     import rmm
 
     rmm.reinitialize(
-        devices=[local_rank],
+        devices=local_rank,
         managed_memory=True,
         pool_allocator=True,
     )
 
-    torch.distributed.barrier()
     import cupy
 
     cupy.cuda.Device(local_rank).use()
@@ -78,11 +72,110 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 
     enable_spilling()
 
+    torch.cuda.set_device(local_rank)
+
     cugraph_comms_init(
         rank=global_rank, world_size=world_size, uid=cugraph_id, device=local_rank
     )
 
     wm_init(global_rank, world_size, local_rank, torch.cuda.device_count())
+
+
+def partition_data(dataset, split_idx, edge_path, feature_path, label_path, meta_path):
+    data = dataset[0]
+
+    # Split and save edge index
+    os.makedirs(
+        edge_path,
+        exist_ok=True,
+    )
+    for (r, e) in enumerate(torch.tensor_split(data.edge_index, world_size, dim=1)):
+        rank_path = os.path.join(edge_path, f"rank={r}.pt")
+        torch.save(
+            e.clone(),
+            rank_path,
+        )
+
+    # Split and save features
+    os.makedirs(
+        feature_path,
+        exist_ok=True,
+    )
+
+    for (r, f) in enumerate(torch.tensor_split(data.x, world_size)):
+        rank_path = os.path.join(feature_path, f"rank={r}_x.pt")
+        torch.save(
+            f.clone(),
+            rank_path,
+        )
+    for (r, f) in enumerate(torch.tensor_split(data.y, world_size)):
+        rank_path = os.path.join(feature_path, f"rank={r}_y.pt")
+        torch.save(
+            f.clone(),
+            rank_path,
+        )
+
+    # Split and save labels
+    os.makedirs(
+        label_path,
+        exist_ok=True,
+    )
+    for (d, i) in split_idx.items():
+        i_parts = torch.tensor_split(i, world_size)
+        for r, i_part in enumerate(i_parts):
+            rank_path = os.path.join(label_path, f"rank={r}")
+            os.makedirs(rank_path, exist_ok=True)
+            torch.save(i_part, os.path.join(rank_path, f"{d}.pt"))
+
+    # Save metadata
+    meta = {
+        "num_classes": int(dataset.num_classes),
+        "num_features": int(dataset.num_features),
+        "num_nodes": int(data.num_nodes),
+    }
+    with open(meta_path, "w") as f:
+        json.dump(meta, f)
+
+
+def load_partitioned_data(
+    rank, edge_path, feature_path, label_path, meta_path, wg_mem_type
+):
+    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+
+    graph_store = GraphStore(is_multi_gpu=True)
+    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+
+    # Load metadata
+    with open(meta_path, "r") as f:
+        meta = json.load(f)
+
+    # Load labels
+    split_idx = {}
+    for split in ["train", "test", "valid"]:
+        split_idx[split] = torch.load(
+            os.path.join(label_path, f"rank={rank}", f"{split}.pt")
+        )
+        print(f"shape of {split}: ", split_idx[split].shape)
+
+    # Load features
+    feature_store["node", "x"] = torch.load(
+        os.path.join(feature_path, f"rank={rank}_x.pt")
+    )
+
+
+    feature_store["node", "y"] = torch.load(
+        os.path.join(feature_path, f"rank={rank}_y.pt")
+    )
+
+    # Load edge index
+    eix = torch.load(os.path.join(edge_path, f"rank={rank}.pt"))
+
+    print(f"edges shape: {eix.shape}")
+    graph_store[
+        ("node", "rel", "node"), "coo", False, (meta["num_nodes"], meta["num_nodes"])
+    ] = eix
+
+    return (feature_store, graph_store), split_idx, meta
 
 
 def run_train(
@@ -139,7 +232,7 @@ def run_train(
         **kwargs,
     )
 
-    ix_valid = split_idx["val"].cuda()
+    ix_valid = split_idx["valid"].cuda()
     valid_path = None if in_memory else os.path.join(tempdir, f"valid_{global_rank}")
     if valid_path:
         os.mkdir(valid_path)
@@ -253,75 +346,26 @@ def run_train(
     wm_finalize()
     cugraph_comms_shutdown()
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_channels", type=int, default=256)
     parser.add_argument("--num_layers", type=int, default=2)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--epochs", type=int, default=4)
-    parser.add_argument("--batch_size", type=int, default=1024)
+    parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--fan_out", type=int, default=30)
+    parser.add_argument("--tempdir_root", type=str, default=None)
+    parser.add_argument("--dataset_root", type=str, default="/data")
+    parser.add_argument("--dataset", type=str, default="ogbn-products")
+    parser.add_argument("--skip_partition", type=bool, default=True)
     parser.add_argument("--wg_mem_type", type=str, default="distributed")
+
     parser.add_argument("--in_memory", action="store_true", default=True)
     parser.add_argument("--seeds_per_call", type=int, default=-1)
-    parser.add_argument("--tempdir_root", type=str, default="/tmp")
-    parser.add_argument("-g", "--graph", default="ogbn_papers")
-    parser.add_argument("--host", default="http://172.17.0.2")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-    parser.add_argument("--skip_tg_write", "-s", action="store_true", default=True)
-
 
     return parser.parse_args()
 
-metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "product",
-            "features_list": {
-                "feature": "LIST"
-            },
-            "label": "label",
-            "split": "split"
-        }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
-            "src": "product",
-            "dst": "product"
-        }
-    ],
-    "data_dir": "/tg/tmp/ogbn_product",
-    "num_classes": 47,
-    "num_features": 100,
-    "num_nodes": 2449029
-}
-
-metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "paper",
-            "features_list": {
-                "feature": "LIST",
-
-            },
-            "label": "label",
-            "split": "split"
-        }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
-            "src": "paper",
-            "dst": "paper"
-        }
-    ],
-    "data_dir": "/tg/tmp/ogbn_paper",
-    "num_classes": 172,
-    "num_features": 128,
-    "num_nodes": 111059956
-}
 
 if __name__ == "__main__":
     args = parse_args()
@@ -333,11 +377,6 @@ if __name__ == "__main__":
         global_rank = dist.get_rank()
         local_rank = int(os.environ["LOCAL_RANK"])
         device = torch.device(local_rank)
-        # TODO: test if this change works 
-        # if global_rank == 0:
-        #     from rmm.allocators.torch import rmm_torch_allocator
-        #     torch.cuda.memory.change_current_allocator(rmm_torch_allocator)
-        # torch.distributed.barrier()
 
         # Create the uid needed for cuGraph comms
         if global_rank == 0:
@@ -348,29 +387,40 @@ if __name__ == "__main__":
         cugraph_id = cugraph_id[0]
 
         init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
-        
-        if global_rank == 0 and not args.skip_tg_write:
-            # tg connection
-            conn = TigerGraphConnection(
-                host=args.host,
-                graphname=args.graph,
-                username=args.username,
-                password=args.password
+
+        # Split the data
+        edge_path = os.path.join(args.dataset_root, args.dataset + "_eix_part")
+        feature_path = os.path.join(args.dataset_root, args.dataset + "_fea_part")
+        label_path = os.path.join(args.dataset_root, args.dataset + "_label_part")
+        meta_path = os.path.join(args.dataset_root, args.dataset + "_meta.json")
+
+        # We partition the data to avoid loading it in every worker, which will
+        # waste memory and can lead to an out of memory exception.
+        # cugraph_pyg.GraphStore and cugraph_pyg.WholeFeatureStore are always
+        # constructed from partitions of the edge index and features, respectively,
+        # so this works well.
+        if args.skip_partition and global_rank == 0:
+            dataset = PygNodePropPredDataset(name=args.dataset, root=args.dataset_root)
+            split_idx = dataset.get_idx_split()
+
+            partition_data(
+                dataset,
+                split_idx,
+                meta_path=meta_path,
+                label_path=label_path,
+                feature_path=feature_path,
+                edge_path=edge_path,
             )
-            conn.getToken(conn.createSecret())
-            # TODO: change world_size to local world size
-            # for MNMG we need only local world size to train
-            export_tg_data(conn, metadata, world_size, force=True)
 
         dist.barrier()
         data, split_idx, meta = load_partitioned_data(
-            metadata,
-            local_rank,
-            args.wg_mem_type,
-            world_size
+            rank=global_rank,
+            edge_path=edge_path,
+            feature_path=feature_path,
+            label_path=label_path,
+            meta_path=meta_path,
+            wg_mem_type=args.wg_mem_type,
         )
-
-        split_idx = shuffle_splits(split_idx, global_rank, world_size)
         dist.barrier()
 
         model = torch_geometric.nn.models.GCN(

@@ -1,8 +1,10 @@
 import argparse
 from pyTigerGraph import TigerGraphConnection
+import logging
 import re
-from .tg_utils import timeit
+from tg_gnn.utils import timeit
 
+logger = logging.getLogger(__name__)
 
 def is_query_installed(
     conn, query_name: str, return_status: bool = False
@@ -21,7 +23,7 @@ def is_query_installed(
         return is_installed
 
 def install_query(
-    conn,
+    conn: TigerGraphConnection,
     query: str = None,
     file_path: str = None,
     replace: dict = None,
@@ -92,7 +94,9 @@ def install_query(
     return query_name
 
 @timeit
-def create_gsql_query(metadata, num_partitions):
+def create_gsql_query(
+    metadata: dict, 
+    num_partitions: int) -> str:
     data_dir = metadata["data_dir"]
     nodes = metadata["nodes"]
     edges = metadata["edges"]
@@ -100,8 +104,7 @@ def create_gsql_query(metadata, num_partitions):
     query = "CREATE DISTRIBUTED QUERY data_load_gen_query_dist() {\n\n"
 
     # Loop through nodes to generate node file and features 
-    for i, node in enumerate(nodes):
-        vertex_name = node["vertex_name"]
+    for i, (vertex_name, node) in enumerate(nodes.items()):
         features_list = node.get("features_list", {})
         label = node.get("label", "")
         split = node.get("split", "")
@@ -149,8 +152,7 @@ def create_gsql_query(metadata, num_partitions):
         query += f"\n"
 
     # Loop through edges to generate edge file, features, and labels
-    for i, edge in enumerate(edges):
-        rel_name = edge["rel_name"]
+    for i, (rel_name, edge) in enumerate(edges.items()):
         src = edge["src"]
         dst = edge["dst"]
         edge_features = edge.get("features_list", {})
@@ -204,58 +206,21 @@ def create_gsql_query(metadata, num_partitions):
     return query
 
 @timeit
-def install_and_run_query(conn, gsql_query, timeout=200000, force=True):
-    print("Installing the GSQL query...")
-    query_name = install_query(conn, gsql_query, force=force)
-    print("Running the GSQL query to export the data...") 
-    conn.runInstalledQuery(query_name, timeout=timeout)
+def install_and_run_query(
+    conn: TigerGraphConnection, 
+    gsql_query: str, 
+    timeout: int = 200000, 
+    force: bool = True) -> None:
+    try:
+        logger.info("Installing the GSQL query...")
+        query_name = install_query(conn, gsql_query, force=force)
+    except Exception as install_error:
+        logger.exception("Error installing the GSQL query: %s", install_error)
+        raise  
 
-metadata = {
-    "nodes": [ 
-        {
-            "vertex_name": "product",
-            "features_list": { 
-                "feature": "LIST"
-            },
-            "label": "label",
-            "split": "split"
-        }
-    ], 
-    "edges": [
-        {
-            "rel_name": "rel",
-            "src": "product",
-            "dst": "product"
-        }
-    ],
-    "data_dir": "/tg/tmp/ogbn_product",
-    "num_classes": 47,
-    "num_features": 100,
-    "num_nodes": 2449029
-}
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("-g", "--graph", required=True)
-    parser.add_argument("--host", default="http://172.17.0.2")
-    parser.add_argument("--username", "-u", default="tigergraph")
-    parser.add_argument("--password", "-p", default="tigergraph")
-    args = parser.parse_args()
-
-    print(f"graph name: {args.graph}")
-
-    gsql_query = create_gsql_query(metadata, 2)
-    print(gsql_query)
-
-    #tg connection
-    conn = TigerGraphConnection(
-        host=args.host,
-        graphname=args.graph,
-        username=args.username,
-        password=args.password
-    )
-    conn.getToken(conn.createSecret())
-    
-    install_and_run_query(conn, gsql_query, timeout=50000000, force=True)
+    try:
+        logger.info("Running the GSQL query to export the data...")
+        conn.runInstalledQuery(query_name, timeout=timeout)
+    except Exception as run_error:
+        logger.exception("Error running the installed GSQL query: %s", run_error)
+        raise
