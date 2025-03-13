@@ -2,9 +2,13 @@ import pytest
 from unittest import mock
 import torch
 from torch_geometric.data import Data, HeteroData
-from tg_gnn.utils import renumber_data
+from tg_gnn.utils import renumber_data, gather_files, assign_files_to_rank
 import torch.distributed as dist
+import tempfile
+import shutil
+from pathlib import Path
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def run_homogeneous_test(rank, world_size):
     # Initialize distributed process group
     dist.init_process_group(
@@ -45,7 +49,7 @@ def test_homogeneous_renumbering():
     world_size = 2
     torch.multiprocessing.spawn(run_homogeneous_test, args=(world_size,), nprocs=world_size, join=True)
 
-
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def run_heterogeneous_test(rank, world_size):
     dist.init_process_group(
         backend='nccl',
@@ -95,3 +99,36 @@ def run_heterogeneous_test(rank, world_size):
 def test_heterogeneous_renumbering():
     world_size = 2
     torch.multiprocessing.spawn(run_heterogeneous_test, args=(world_size,), nprocs=world_size, join=True)
+
+
+def test_gather_files():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        Path(tmpdir, "product_1.csv").touch()
+        Path(tmpdir, "product_2.csv").touch()
+
+        files = gather_files(tmpdir)
+        assert len(files) == 2
+        assert all(f.endswith('.csv') for f in files)
+
+        nested_dir = Path(tmpdir, "nested")
+        nested_dir.mkdir()
+        Path(nested_dir, "product_3.csv").touch()
+
+        files = gather_files(tmpdir)
+        assert len(files) == 2, "Should ignore nested files when flat structure"
+
+        # Test nested detection explicitly
+        shutil.move(Path(tmpdir, "product_1.csv"), nested_dir)
+        shutil.move(Path(tmpdir, "product_2.csv"), nested_dir)
+
+        files = gather_files(tmpdir)
+        assert len(files) == 1, "Should detect nested structure correctly"
+        
+        
+def test_assign_files_to_rank():
+    files = [f"file_{i}.csv" for i in range(8)]
+    assigned_rank_0 = assign_files_to_rank(files, rank=0, world_size=4)
+    assert assigned_rank_0 == ['file_0.csv', 'file_4.csv'], "Rank 0 assignment incorrect"
+
+    assigned_rank_3 = assign_files_to_rank(files, 3, 4)
+    assert assigned_rank_3 == ['file_3.csv', 'file_7.csv'], "Rank 3 assignment incorrect"

@@ -3,6 +3,10 @@ import os
 import torch
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
+import os
+from pathlib import Path
+from typing import List
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -271,3 +275,80 @@ def renumber_data(
     torch.cuda.empty_cache()
 
     return data
+
+
+def gather_files(data_dir: str, pattern: str = "product_*.csv") -> List[str]:
+    """Gather all files matching the pattern from nested or flat structure."""
+    data_path = Path(data_dir)
+    files = []
+
+    # Check if nested directories exist
+    if any(data_path.iterdir()):
+        if any(p.is_dir() for p in data_path.iterdir()):
+            # Nested structure
+            for subdir in data_path.iterdir():
+                if subdir := Path(subdir).is_dir():
+                    files.extend(sorted(str(p) for p in subdir.glob(pattern)))
+    else:
+        files = sorted(str(p) for p in data_path.glob(pattern))
+
+    return files
+
+
+def assign_files_to_rank(files: List[str], rank: int, world_size: int) -> List[str]:
+    """Evenly assigns files to GPU ranks."""
+    return files[rank::world_size]
+
+
+# Example usage
+def main(data_dir: str, rank: int, world_size: int):
+    all_files = gather_files(data_dir)
+
+    if not all_files:
+        raise ValueError(f"No files found in {data_dir}")
+
+    assigned_files = assign_files_to_rank(all_files, rank, world_size)
+
+    print(f"Rank {rank}/{world_size} assigned files:", assigned_files)
+
+
+# Unit tests
+if __name__ == "__main__":
+    import tempfile
+    import shutil
+
+    def test_gather_files():
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "product_1.csv").touch()
+            Path(tmpdir, "product_2.csv").touch()
+
+            files = gather_files(tmpdir)
+            assert len(files) == 2
+            assert all(f.endswith('.csv') for f in files)
+
+            nested_dir = Path(tmpdir, "nested")
+            nested_dir.mkdir()
+            Path(nested_dir, "product_3.csv").touch()
+
+            files = gather_files(tmpdir)
+            assert len(files) == 2, "Should ignore nested files when flat structure"
+
+            # Test nested detection explicitly
+            shutil.move(Path(tmpdir, "product_1.csv"), nested_dir)
+            shutil.move(Path(tmpdir, "product_2.csv"), nested_dir)
+
+            files = gather_files(tmpdir)
+            assert len(files) == 1, "Should detect nested structure correctly"
+
+    def test_assign_files_to_rank():
+        files = [f"file_{i}.csv" for i in range(8)]
+        assigned_rank_0 = assign_files_to_rank(files, rank=0, world_size=4)
+        assert assigned_rank_0 == ['file_0.csv', 'file_4.csv'], "Rank 0 assignment incorrect"
+
+        assigned_rank_3 = assign_files_to_rank(files, 3, 4)
+        assert assigned_rank_3 == ['file_3.csv', 'file_7.csv'], "Rank 3 assignment incorrect"
+
+    test_gather_files()
+    test_assign_files_to_rank()
+
+    print("All tests passed.")
