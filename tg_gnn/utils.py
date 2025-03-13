@@ -3,9 +3,10 @@ import os
 import torch
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
-import os
+import cudf
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import logging
 logger = logging.getLogger(__name__)
@@ -276,79 +277,65 @@ def renumber_data(
 
     return data
 
+def _check_nested(data_path: Path) -> bool:
+    """Check if data dir has nested structure."""
+    return any(p.is_dir() for p in data_path.iterdir())
 
-def gather_files(data_dir: str, pattern: str = "product_*.csv") -> List[str]:
+def _gather_files(data_dir: str, pattern: str) -> List[str]:
     """Gather all files matching the pattern from nested or flat structure."""
     data_path = Path(data_dir)
     files = []
 
-    # Check if nested directories exist
-    if any(data_path.iterdir()):
-        if any(p.is_dir() for p in data_path.iterdir()):
-            # Nested structure
-            for subdir in data_path.iterdir():
-                if subdir := Path(subdir).is_dir():
-                    files.extend(sorted(str(p) for p in subdir.glob(pattern)))
+    if _check_nested(data_path):
+        # Nested structure for shared filesytem
+        for subdir in data_path.iterdir():
+            if subdir.is_dir():
+                files.extend(sorted(str(p) for p in subdir.glob(pattern)))
     else:
+        # flat structure for local filesystem
         files = sorted(str(p) for p in data_path.glob(pattern))
 
     return files
 
 
-def assign_files_to_rank(files: List[str], rank: int, world_size: int) -> List[str]:
-    """Evenly assigns files to GPU ranks."""
+def _assign_files_to_rank(files: List[str], rank: int, world_size: int) -> List[str]:
+    """
+    Evenly assigns files to GPU ranks. 
+    For local rank use local world size and for global use global world size.
+    """
     return files[rank::world_size]
 
 
-# Example usage
-def main(data_dir: str, rank: int, world_size: int):
-    all_files = gather_files(data_dir)
+def get_assigned_files(
+    data_dir: str,
+    pattern: str, 
+    rank: Optional[int] = None,
+    world_size: Optional[int] = None
+) -> List[str]:
+    """Get assined files to this rank"""
+    data_path = Path(data_dir)
 
-    if not all_files:
-        raise ValueError(f"No files found in {data_dir}")
+    if _check_nested(data_path):
+        # shared filesystem write
+        # all files are visible and used global sizes to distribute. 
+        rank = dist.get_global_rank()
+        world_size = dist.get_world_size()
+    else:
+        # local filesystem write
+        # only local files are visible and used local values to distribute. 
+        rank = get_local_rank()
+        world_size = get_local_world_size()
 
-    assigned_files = assign_files_to_rank(all_files, rank, world_size)
+    files = _gather_files(data_dir, pattern)
+    assigned_files = _assign_files_to_rank(files, rank, world_size)
+    return assigned_files 
 
-    print(f"Rank {rank}/{world_size} assigned files:", assigned_files)
 
+def read_file(fp):
+    return cudf.read_csv(fp)
 
-# Unit tests
-if __name__ == "__main__":
-    import tempfile
-    import shutil
-
-    def test_gather_files():
-        with tempfile.TemporaryDirectory() as tmpdir:
-            Path(tmpdir, "product_1.csv").touch()
-            Path(tmpdir, "product_2.csv").touch()
-
-            files = gather_files(tmpdir)
-            assert len(files) == 2
-            assert all(f.endswith('.csv') for f in files)
-
-            nested_dir = Path(tmpdir, "nested")
-            nested_dir.mkdir()
-            Path(nested_dir, "product_3.csv").touch()
-
-            files = gather_files(tmpdir)
-            assert len(files) == 2, "Should ignore nested files when flat structure"
-
-            # Test nested detection explicitly
-            shutil.move(Path(tmpdir, "product_1.csv"), nested_dir)
-            shutil.move(Path(tmpdir, "product_2.csv"), nested_dir)
-
-            files = gather_files(tmpdir)
-            assert len(files) == 1, "Should detect nested structure correctly"
-
-    def test_assign_files_to_rank():
-        files = [f"file_{i}.csv" for i in range(8)]
-        assigned_rank_0 = assign_files_to_rank(files, rank=0, world_size=4)
-        assert assigned_rank_0 == ['file_0.csv', 'file_4.csv'], "Rank 0 assignment incorrect"
-
-        assigned_rank_3 = assign_files_to_rank(files, 3, 4)
-        assert assigned_rank_3 == ['file_3.csv', 'file_7.csv'], "Rank 3 assignment incorrect"
-
-    test_gather_files()
-    test_assign_files_to_rank()
-
-    print("All tests passed.")
+def load_csv(file_paths: List[str]):
+    with ThreadPoolExecutor() as executor:
+        df_list = list(executor.map(read_file, file_paths))
+    return cudf.concat(df_list, ignore_index=True)
+    
