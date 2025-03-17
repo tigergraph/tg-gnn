@@ -318,7 +318,7 @@ def get_assigned_files(
     if _check_nested(data_path):
         # shared filesystem write
         # all files are visible and used global sizes to distribute. 
-        rank = dist.get_global_rank()
+        rank = dist.get_rank()
         world_size = dist.get_world_size()
     else:
         # local filesystem write
@@ -332,10 +332,11 @@ def get_assigned_files(
 
 
 def read_file(fp):
-    return cudf.read_csv(fp)
+    return cudf.read_csv(fp, header=None)
 
 def load_csv(file_paths: List[str]):
+    if not file_paths:
+        raise ValueError("No file paths provided.")
     with ThreadPoolExecutor() as executor:
         df_list = list(executor.map(read_file, file_paths))
     return cudf.concat(df_list, ignore_index=True)
-    
