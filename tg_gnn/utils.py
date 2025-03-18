@@ -281,6 +281,13 @@ def _check_nested(data_path: Path) -> bool:
     """Check if data dir has nested structure."""
     return any(p.is_dir() for p in data_path.iterdir())
 
+def get_fs_type(data_dir: str) -> str:
+    """Return shared filesystem in data dir is nested."""
+    if _check_nested(Path(data_dir)):
+        return "shared"
+    else:
+        return "local"
+
 def _gather_files(data_dir: str, pattern: str) -> List[str]:
     """Gather all files matching the pattern from nested or flat structure."""
     data_path = Path(data_dir)

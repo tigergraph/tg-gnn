@@ -5,7 +5,7 @@ import sys
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Load data into TigerGraph using a loading job.")
 
-    parser.add_argument('--host', type=str, default="http://172.17.0.3",
+    parser.add_argument('--host', type=str, default="http://localhost",
                         help='TigerGraph server host URL (default: http://localhost)')
     parser.add_argument('--graph_name', '-g', type=str, required=True,
                         help='Name of the TigerGraph graph')
@@ -49,7 +49,7 @@ def main():
             BEGIN
             CREATE LOADING JOB load_data FOR GRAPH {args.graph_name} {{
                 DEFINE FILENAME f="{args.node_feature_file}";
-                LOAD f TO VERTEX product VALUES ($1, SPLIT($0, ','), _, _) USING header="false", separator="|";
+                LOAD f TO VERTEX product VALUES ($1, SPLIT($0, ","), _, _) USING header="false", separator="|";
             }}
             END
             RUN LOADING JOB load_data
@@ -75,7 +75,7 @@ def main():
         BEGIN
         CREATE LOADING JOB load_data FOR GRAPH {args.graph_name} {{
             DEFINE FILENAME f="{args.node_label_file}";
-            LOAD f TO VERTEX product VALUES ($0, _,$1, _) USING header="false", separator=",";
+            LOAD f TO VERTEX product VALUES ($1, _,$0, _) USING header="false", separator="|";
         }}
         END
         RUN LOADING JOB load_data
@@ -102,15 +102,19 @@ def main():
         print("Executing GSQL script...")
         if args.node_feature_file != "":
             response = conn.gsql(node_feature_load)
+            print("Response:", response)
         if args.node_split_file != "":
             response = conn.gsql(node_split_load)
+            print("Response:", response)
         if args.edge_file != "":
             response = conn.gsql(edge_data_load)
+            print("Response:", response)
         if args.node_label_file != "":
             response = conn.gsql(node_label_load)
+            print("Response:", response)
         # response = conn.gsql(edge_data_load)
         print("GSQL script executed successfully.")
-        print("Response:", response)
+        
     except Exception as e:
         print(f"Error executing GSQL script: {e}")
         sys.exit(1)

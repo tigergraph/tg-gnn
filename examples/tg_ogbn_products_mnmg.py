@@ -275,7 +275,7 @@ def parse_args():
     parser.add_argument("--tempdir_root", type=str, default="/tmp")
     parser.add_argument("-g", "--graph", default="ogbn_products", 
         help="The default graph for running queries.")
-    parser.add_argument("--host", default="http://172.17.0.3", 
+    parser.add_argument("--host", default="http://localhost", 
         help=("The host name or IP address of the TigerGraph server."
             "Make sure to include the protocol (http:// or https://)."
             "If certPath is None and the protocol is https, a self-signed certificate will be used.")
@@ -351,8 +351,8 @@ metadata = {
             "features_list": {
                 "embedding": "LIST"
             },
-            "label": "node_label",
-            "split": "train_val_test",
+            "label": "label",
+            "split": "split",
             "num_nodes": 2449029,
             "num_classes": 47,
             "num_features": 100,
@@ -365,7 +365,7 @@ metadata = {
             "dst": "product"
         }
     },
-    "data_dir": "/data/ogbn_product",
+    "data_dir": "/data/tg",
     "num_classes": 47,
     "num_features": 100, 
     "num_nodes": 2449029 

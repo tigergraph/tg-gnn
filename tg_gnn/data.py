@@ -1,16 +1,20 @@
 import torch
 import os
+import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
 from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
-from tg_gnn.utils import timeit, get_local_world_size, renumber_data, load_csv, get_assigned_files
+from tg_gnn.utils import timeit, get_local_world_size, renumber_data, load_csv, get_assigned_files, get_fs_type
 import logging
 logger = logging.getLogger(__name__)
 
 @timeit
 def export_tg_data(conn, metadata, force=False, timeout=2000000):
     try:
-        local_world_size = get_local_world_size()
-        gsql_query = create_gsql_query(metadata, num_partitions=local_world_size)
+        if get_fs_type(metadata["data_dir"]) == "local":
+            num_partitions = get_local_world_size()
+        else:
+            num_partitions = dist.get_world_size()
+        gsql_query = create_gsql_query(metadata, num_partitions=num_partitions)
         install_and_run_query(conn, gsql_query, force=force, timeout=timeout)
     except Exception as export_error:
         logger.exception(f"Error exporting TG data: {export_error}")

@@ -1,3 +1,4 @@
+import argparse
 import polars as pl
 
 def add_incremental_counter(file_path, output_path, delimiter="|"):
@@ -14,8 +15,6 @@ def add_incremental_counter(file_path, output_path, delimiter="|"):
     df.write_csv(output_path, separator=delimiter)
     print(f"Updated file written to: {output_path} with delimiter '{delimiter}'")
 
-
-
 def add_incremental_counter_with_custom_delimiter(file_path, output_path, delimiter="|"):
     # Read the CSV file
     df = pl.read_csv(file_path, has_header=False)
@@ -23,24 +22,40 @@ def add_incremental_counter_with_custom_delimiter(file_path, output_path, delimi
     # Add the incremental counter column
     df = df.with_columns(pl.Series("NodeId", range(len(df))))
     last_col = df.columns[-2]
-    print(last_col)
     
-    # Create the `NodeId_with_delimiter` column and drop `NodeId` immediately after
+    # Create the `NodeId_with_delimiter` column and drop `NodeId` and the original last column
     df = df.with_columns(
         (df[last_col].cast(pl.Utf8) + delimiter + df["NodeId"].cast(pl.Utf8)).alias("NodeId_with_delimiter")
     )
     df = df.drop(["NodeId", last_col])
+    
     # Write the updated DataFrame to the output file
     df.write_csv(output_path, include_header=False)
     print(f"Updated file written to: {output_path}")
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="Process a CSV file by adding an incremental counter column."
+    )
+    parser.add_argument("--file_path", help="Path to the input CSV file")
+    parser.add_argument("--output_path", help="Path where the output CSV file will be written")
+    parser.add_argument(
+        "--delimiter", 
+        default="|", 
+        help="Delimiter to use in the output file (default: '|')"
+    )
+    parser.add_argument(
+        "--custom",
+        action="store_true",
+        help="If set, uses the custom delimiter processing function."
+    )
 
+    args = parser.parse_args()
 
+    if args.custom:
+        add_incremental_counter_with_custom_delimiter(args.file_path, args.output_path, delimiter=args.delimiter)
+    else:
+        add_incremental_counter(args.file_path, args.output_path, delimiter=args.delimiter)
 
-
-
-# Example usage
-file_path = "/data/ogbn_products/raw/node-label.csv" 
-output_path = "/data/ogbn_products/raw/node-label_with_id.csv" 
-
-add_incremental_counter_with_custom_delimiter(file_path, output_path, delimiter="|")
+if __name__ == "__main__":
+    main()
