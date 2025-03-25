@@ -153,22 +153,22 @@ def load_partitioned_data(
     split_idx = {}
     for split in ["train", "test", "valid"]:
         split_idx[split] = torch.load(
-            os.path.join(label_path, f"rank={rank}", f"{split}.pt")
+            os.path.join(label_path, f"rank={rank}", f"{split}.pt"), weights_only=False
         )
         print(f"shape of {split}: ", split_idx[split].shape)
 
     # Load features
     feature_store["node", "x"] = torch.load(
-        os.path.join(feature_path, f"rank={rank}_x.pt")
+        os.path.join(feature_path, f"rank={rank}_x.pt"), weights_only=False
     )
 
 
     feature_store["node", "y"] = torch.load(
-        os.path.join(feature_path, f"rank={rank}_y.pt")
+        os.path.join(feature_path, f"rank={rank}_y.pt"), weights_only=False
     )
 
     # Load edge index
-    eix = torch.load(os.path.join(edge_path, f"rank={rank}.pt"))
+    eix = torch.load(os.path.join(edge_path, f"rank={rank}.pt"), weights_only=False)
 
     print(f"edges shape: {eix.shape}")
     graph_store[

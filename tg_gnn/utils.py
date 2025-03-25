@@ -3,6 +3,11 @@ import os
 import torch
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
+import cudf
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import List, Optional
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -271,3 +276,74 @@ def renumber_data(
     torch.cuda.empty_cache()
 
     return data
+
+def _check_nested(data_path: Path) -> bool:
+    """Check if data dir has nested structure."""
+    return any(p.is_dir() for p in data_path.iterdir())
+
+def get_fs_type(data_dir: str) -> str:
+    """Return shared filesystem in data dir is nested."""
+    if _check_nested(Path(data_dir)):
+        return "shared"
+    else:
+        return "local"
+
+def _gather_files(data_dir: str, pattern: str) -> List[str]:
+    """Gather all files matching the pattern from nested or flat structure."""
+    data_path = Path(data_dir)
+    files = []
+
+    if _check_nested(data_path):
+        # Nested structure for shared filesytem
+        for subdir in data_path.iterdir():
+            if subdir.is_dir():
+                files.extend(sorted(str(p) for p in subdir.glob(pattern)))
+    else:
+        # flat structure for local filesystem
+        files = sorted(str(p) for p in data_path.glob(pattern))
+
+    return files
+
+
+def _assign_files_to_rank(files: List[str], rank: int, world_size: int) -> List[str]:
+    """
+    Evenly assigns files to GPU ranks. 
+    For local rank use local world size and for global use global world size.
+    """
+    return files[rank::world_size]
+
+
+def get_assigned_files(
+    data_dir: str,
+    pattern: str, 
+    rank: Optional[int] = None,
+    world_size: Optional[int] = None
+) -> List[str]:
+    """Get assined files to this rank"""
+    data_path = Path(data_dir)
+
+    if _check_nested(data_path):
+        # shared filesystem write
+        # all files are visible and used global sizes to distribute. 
+        rank = dist.get_rank()
+        world_size = dist.get_world_size()
+    else:
+        # local filesystem write
+        # only local files are visible and used local values to distribute. 
+        rank = get_local_rank()
+        world_size = get_local_world_size()
+
+    files = _gather_files(data_dir, pattern)
+    assigned_files = _assign_files_to_rank(files, rank, world_size)
+    return assigned_files 
+
+
+def read_file(fp):
+    return cudf.read_csv(fp, header=None)
+
+def load_csv(file_paths: List[str]):
+    if not file_paths:
+        raise ValueError("No file paths provided.")
+    with ThreadPoolExecutor() as executor:
+        df_list = list(executor.map(read_file, file_paths))
+    return cudf.concat(df_list, ignore_index=True)

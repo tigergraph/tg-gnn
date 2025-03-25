@@ -25,14 +25,6 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
     cd tg-gnn
     pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
     ```
-4. **Fix some bugs which is not available yet in nightly build**
-    ```bash
-    git clone https://github.com/alexbarghi-nv/cugraph-gnn.git
-    cd cugraph-gnn
-    git checkout taobao-add-timing
-    cd python/cugraph-pyg
-    pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
-    ```
 ---
 
 ## Changes Required to Run example GCN Model code on Any TigerGraph Graph

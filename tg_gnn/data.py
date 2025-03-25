@@ -1,16 +1,29 @@
 import torch
 import os
+import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
 from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
-from tg_gnn.utils import timeit, get_local_rank, get_local_world_size, renumber_data
+from tg_gnn.utils import timeit, get_local_world_size, renumber_data, load_csv, get_assigned_files, get_fs_type
 import logging
 logger = logging.getLogger(__name__)
 
 @timeit
 def export_tg_data(conn, metadata, force=False, timeout=2000000):
+    """
+    Install and run the GSQL query to export the data from TigerGraph.
+    args:
+        conn: TigerGraphConnection object
+        metadata: metadata about the graph, contains info about required vertices and 
+            features for GNN training
+        force: force to reinstall the query
+        timeout: timeout for the gsql query
+    """
     try:
-        local_world_size = get_local_world_size()
-        gsql_query = create_gsql_query(metadata, num_partitions=local_world_size)
+        if get_fs_type(metadata["data_dir"]) == "local":
+            num_partitions = get_local_world_size()
+        else:
+            num_partitions = dist.get_world_size()
+        gsql_query = create_gsql_query(metadata, num_partitions=num_partitions)
         install_and_run_query(conn, gsql_query, force=force, timeout=timeout)
     except Exception as export_error:
         logger.exception(f"Error exporting TG data: {export_error}")
@@ -51,7 +64,6 @@ def load_tg_data(
     """
     # import after rmm re-initialization
     import cudf
-    local_rank = get_local_rank()
     data_dir = metadata.get("data_dir", "")
     nodes_meta = metadata.get("nodes", {})
     edges_meta = metadata.get("edges", {})
@@ -74,13 +86,9 @@ def load_tg_data(
             dict | None: A dictionary containing node data suitable for updating the `Data` or `HeteroData` object.
                           Returns None if the file does not exist.
         """
-        file_path = os.path.join(data_dir, f"{vertex_name}_p{local_rank}.csv")
-        if not os.path.exists(file_path):
-            logger.info(f"Node file not found: {file_path}")
-            logger.warning(f"Please make sure to run tg data export and export path should be accessible.")
-            return None
+        file_paths = get_assigned_files(data_dir, f"{vertex_name}_p*.csv")
         
-        df = cudf.read_csv(file_path, header=None)
+        df = load_csv(file_paths)
         
         has_label = bool(meta.get("label", False))
         has_split = bool(meta.get("split", False))
@@ -134,14 +142,10 @@ def load_tg_data(
             meta.get("src", ""), meta.get("dst", "")
         )
         rel = (src, rel_name, dst)
-        file_name = f"{src}_{rel_name}_{dst}_p{local_rank}.csv"
-        file_path = os.path.join(data_dir, file_name)
-        if not os.path.exists(file_path):
-            logger.info(f"Edge file not found: {file_path}")
-            logger.warning("Please make sure to run tg data export and export path should be accessible.")
-            return rel, None
-
-        df = cudf.read_csv(file_path, header=None)
+        
+        filename_pattern = f"{src}_{rel_name}_{dst}_p*.csv"
+        file_paths = get_assigned_files(data_dir, filename_pattern)
+        df = load_csv(file_paths)
         
         has_label = "label" in meta
         has_split = "split" in meta  # In case edges have splits
