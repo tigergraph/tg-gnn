@@ -9,6 +9,15 @@ logger = logging.getLogger(__name__)
 
 @timeit
 def export_tg_data(conn, metadata, force=False, timeout=2000000):
+    """
+    Install and run the GSQL query to export the data from TigerGraph.
+    args:
+        conn: TigerGraphConnection object
+        metadata: metadata about the graph, contains info about required vertices and 
+            features for GNN training
+        force: force to reinstall the query
+        timeout: timeout for the gsql query
+    """
     try:
         if get_fs_type(metadata["data_dir"]) == "local":
             num_partitions = get_local_world_size()
