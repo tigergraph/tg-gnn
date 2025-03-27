@@ -366,9 +366,9 @@ metadata = {
             "dst": "product"
         }
     },
-    "data_dir": "/tg",
+    "data_dir": "/data/tg-single",
     "fs_type": "shared",
-    "num_tg_nodes": 2,
+    "num_tg_nodes": 1,
     "num_classes": 47,
     "num_features": 100, 
     "num_nodes": 2449029 

@@ -316,9 +316,7 @@ def _assign_files_to_rank(files: List[str], rank: int, world_size: int) -> List[
 def get_assigned_files(
     data_dir: str,
     pattern: str,
-    fs_type="local",
-    rank: Optional[int] = None,
-    world_size: Optional[int] = None,
+    fs_type: str
 ) -> List[str]:
     """Get assined files to this rank"""
     data_path = Path(data_dir)
@@ -337,10 +335,11 @@ def get_assigned_files(
     assigned_files = _assign_files_to_rank(files, rank, world_size)
     return assigned_files 
 
-
+@timeit
 def read_file(fp):
     return cudf.read_csv(fp, header=None)
 
+@timeit
 def load_csv(file_paths: List[str]):
     if not file_paths:
         raise ValueError("No file paths provided.")

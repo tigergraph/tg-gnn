@@ -11,10 +11,16 @@ logger = logging.getLogger(__name__)
 @timeit
 def export_tg_data(conn, metadata, force=False, timeout=2000000):
     try:
+        # file sytem type
         fs_type = metadata.get("fs_type", "local")
+        logger.info(f"File system is set to {fs_type}.")
+        
+        # caculate the num of partitions
         num_tg_nodes = metadata.get("num_tg_nodes", None)
         num_partitions = get_num_partitions(fs_type=fs_type, num_tg_nodes=num_tg_nodes)
         logger.info(f"Creating total {num_partitions} partitions for tg to export the data.")
+        
+        # create and run query 
         gsql_query = create_gsql_query(metadata, num_partitions=num_partitions)
         install_and_run_query(conn, gsql_query, force=force, timeout=timeout)
     except Exception as export_error:
@@ -59,13 +65,14 @@ def load_tg_data(
     data_dir = metadata.get("data_dir", "")
     nodes_meta = metadata.get("nodes", {})
     edges_meta = metadata.get("edges", {})
+    fs_type = metadata.get("fs_type", "local")
     
     # Determine whether to use HeteroData or Data based on the number of node and edge types
     is_hetero = len(nodes_meta) > 1 or len(edges_meta) > 1
     data = HeteroData() if is_hetero else Data()
 
-
-    def load_node_csv(vertex_name: str, meta: dict) -> dict | None:
+    @timeit
+    def load_node_csv(vertex_name: str, meta: dict) -> dict:
         """
         Reads a node CSV file and extracts node features, labels, and masks.
 
@@ -75,10 +82,9 @@ def load_tg_data(
                 features (dict), label and split info
 
         Returns:
-            dict | None: A dictionary containing node data suitable for updating the `Data` or `HeteroData` object.
-                          Returns None if the file does not exist.
+            dict : A dictionary containing node data suitable for updating the `Data` or `HeteroData` object.
         """
-        file_paths = get_assigned_files(data_dir, f"{vertex_name}_p*.csv")
+        file_paths = get_assigned_files(data_dir, f"{vertex_name}_p*.csv", fs_type)
         
         df = load_csv(file_paths)
         
@@ -112,7 +118,8 @@ def load_tg_data(
         
         del df
         return node_data
-
+    
+    @timeit
     def load_edge_csv(rel_name: str, meta: dict) -> tuple | None:
         """
         Reads an edge CSV file and extracts edge indices, attributes, labels, and masks.
@@ -126,8 +133,7 @@ def load_tg_data(
                 - "split" (str, optional): the edge info about train/val/test splits.
 
         Returns:
-            tuple | None: A tuple containing the edge relationship tuple and a dictionary of edge data.
-                           Returns None if the file does not exist.
+            tuple: A tuple containing the edge relationship tuple and a dictionary of edge data.
         """
 
         src, dst = (
@@ -136,7 +142,7 @@ def load_tg_data(
         rel = (src, rel_name, dst)
         
         filename_pattern = f"{src}_{rel_name}_{dst}_p*.csv"
-        file_paths = get_assigned_files(data_dir, filename_pattern)
+        file_paths = get_assigned_files(data_dir, filename_pattern, fs_type)
         df = load_csv(file_paths)
         
         has_label = "label" in meta
