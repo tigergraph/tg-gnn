@@ -58,6 +58,7 @@ logging.basicConfig(
 )
 
 
+
 from datetime import timedelta
 from tg_gnn.data import load_tg_data, export_tg_data
 from tg_gnn.utils import redistribute_splits
@@ -365,7 +366,9 @@ metadata = {
             "dst": "product"
         }
     },
-    "data_dir": "/data/tg",
+    "data_dir": "/tg",
+    "fs_type": "shared",
+    "num_tg_nodes": 2,
     "num_classes": 47,
     "num_features": 100, 
     "num_nodes": 2449029 
@@ -390,7 +393,6 @@ if __name__ == "__main__":
             cugraph_id = [None]
         dist.broadcast_object_list(cugraph_id, src=0, device=device)
         cugraph_id = cugraph_id[0]
-
         init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
         
         if global_rank == 0 and not args.skip_tg_export:
