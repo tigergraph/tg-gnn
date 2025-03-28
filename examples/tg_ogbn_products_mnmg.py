@@ -178,7 +178,8 @@ def run_train(
         prep_time = round(time.perf_counter() - wall_clock_start, 2)
         print("Total time before training begins (prep_time) =", prep_time, "seconds")
         print("Beginning training...")
-
+    only_train_start = time.perf_counter()
+    logger.info(f"Training for rank {global_rank}...")
     for epoch in range(epochs):
         for i, batch in enumerate(train_loader):
             if i == warmup_steps:
@@ -262,7 +263,8 @@ def run_train(
     # if global_rank == 0:
     #     total_time = round(time.perf_counter() - wall_clock_start, 2)
     #     print("Total Program Runtime (total_time) =", total_time, "seconds")
-
+    logger.info(f"Training for rank {global_rank} completed.")
+    logger.info(f"Training for rank {global_rank} took {time.perf_counter() - only_train_start} seconds.")
     wm_finalize()
     cugraph_comms_shutdown()
 
@@ -465,7 +467,7 @@ if __name__ == "__main__":
         logger.info(f"model creation for rank {global_rank} took {time.perf_counter() - model_load_start} seconds.")
         
         train_start = time.perf_counter()
-        logger.info(f"Training model for rank {global_rank}...")     
+        logger.info(f"running train for rank {global_rank}...")     
         run_train(
             global_rank,
             data,
@@ -482,8 +484,8 @@ if __name__ == "__main__":
             args.in_memory,
             args.seeds_per_call,
         )
-        logger.info(f"Training model for rank {global_rank} completed.")
-        logger.info(f"Training for rank {global_rank} took {time.perf_counter() - train_start} seconds.")
+        logger.info(f"Running train for rank {global_rank} completed.")
+        logger.info(f"train for rank {global_rank} took {time.perf_counter() - train_start} seconds.")
     else:
         warnings.warn("This script should be run with 'torchrun`.  Exiting.")
     total_time = round(time.perf_counter() - wall_clock_start, 2)
