@@ -259,10 +259,9 @@ def run_train(
                 f"Test Accuracy: {acc_test * 100.0:.4f}%",
             )
 
-    if global_rank == 0:
-        total_time = round(time.perf_counter() - wall_clock_start, 2)
-        print("Total Program Runtime (total_time) =", total_time, "seconds")
-        print("total_time - prep_time =", total_time - prep_time, "seconds")
+    # if global_rank == 0:
+    #     total_time = round(time.perf_counter() - wall_clock_start, 2)
+    #     print("Total Program Runtime (total_time) =", total_time, "seconds")
 
     wm_finalize()
     cugraph_comms_shutdown()
@@ -420,7 +419,7 @@ if __name__ == "__main__":
         cugraph_id = cugraph_id[0]
         init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
         logger.info(f"Process {local_rank}/{global_rank} initialized.")
-        logger.info(f"Process {global_rank} took {time.time() - wall_clock_start} seconds to initialize.")
+        logger.info(f"Process {global_rank} took {time.perf_counter() - wall_clock_start} seconds to initialize.")
          
         if global_rank == 0 and not args.skip_tg_export:
             tg_export_start = time.perf_counter()
@@ -487,3 +486,5 @@ if __name__ == "__main__":
         logger.info(f"Training for rank {global_rank} took {time.perf_counter() - train_start} seconds.")
     else:
         warnings.warn("This script should be run with 'torchrun`.  Exiting.")
+    total_time = round(time.perf_counter() - wall_clock_start, 2)
+    print("Total Program Runtime (total_time) =", total_time, "seconds")
