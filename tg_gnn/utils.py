@@ -315,35 +315,53 @@ def _assign_files_to_rank(files: List[str], rank: int, world_size: int) -> List[
 
 def get_assigned_files(
     data_dir: str,
-    pattern: str, 
-    rank: Optional[int] = None,
-    world_size: Optional[int] = None
+    pattern: str,
+    fs_type: str
 ) -> List[str]:
     """Get assined files to this rank"""
     data_path = Path(data_dir)
 
-    if _check_nested(data_path):
-        # shared filesystem write
-        # all files are visible and used global sizes to distribute. 
-        rank = dist.get_rank()
-        world_size = dist.get_world_size()
-    else:
+    if fs_type.lower() == "local":
         # local filesystem write
         # only local files are visible and used local values to distribute. 
         rank = get_local_rank()
         world_size = get_local_world_size()
-
+    else:
+        # shared filesystem write
+        # all files are visible and used global sizes to distribute. 
+        rank = dist.get_rank()
+        world_size = dist.get_world_size()
     files = _gather_files(data_dir, pattern)
     assigned_files = _assign_files_to_rank(files, rank, world_size)
     return assigned_files 
 
-
+@timeit
 def read_file(fp):
     return cudf.read_csv(fp, header=None)
 
+@timeit
 def load_csv(file_paths: List[str]):
     if not file_paths:
         raise ValueError("No file paths provided.")
     with ThreadPoolExecutor() as executor:
         df_list = list(executor.map(read_file, file_paths))
     return cudf.concat(df_list, ignore_index=True)
+
+def get_num_partitions(fs_type: str = "local", num_tg_nodes: int | None = None) -> int:
+    if fs_type.lower() == "local":
+        # if fs system is "local" then num of partitions is local world size.
+        num_partitions = get_local_world_size()
+    else:
+        # else num of partitions is global world size. 
+        num_partitions = dist.get_world_size()
+        if num_tg_nodes is not None: 
+            if num_partitions % num_tg_nodes == 0: 
+                # if world size is divisible by tg node count then 
+                # num partitions can be divided uniformoly.
+                num_partitions = num_partitions // num_tg_nodes
+            else:
+                # in case world size is not divisible by num of tg nodes
+                # we will keep 1 extra partitions so that each process has atleast
+                # one file and few will have more than 1.
+                num_partitions = (num_partitions // num_tg_nodes) + 1
+    return num_partitions
