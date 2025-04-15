@@ -72,7 +72,7 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 
     rmm.reinitialize(
         devices=[local_rank],
-        managed_memory=True,
+        managed_memory=False,
         pool_allocator=True,
     )
 
