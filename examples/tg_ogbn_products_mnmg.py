@@ -297,7 +297,7 @@ def parse_args():
     parser.add_argument("--data_dir", type=str, default="/tmp/tg",
         help="The directory to store the data exported from TG.")
     parser.add_argument("--file_system", type=str, default="shared",
-        help="The type of file system to use. Options are 'shared' or 'distributed'.")
+        help="The type of file system to use. Options are 'local' or 'shared'.")
     parser.add_argument("--tg_nodes", type=int, default=1,
         help="The number of TigerGraph nodes in your cluster. Default value is 1.")
     
