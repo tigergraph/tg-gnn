@@ -15,4 +15,3 @@ sudo cp /var/cuda-repo-ubuntu${ubuntu_version}-12-8-local/cuda-*-keyring.gpg /us
 sudo apt-get update
 sudo apt-get -y install cuda-toolkit-12-8
 sudo apt-get install -y cuda-drivers
-sudo reboot now
