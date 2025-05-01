@@ -56,6 +56,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+logger = logging.getLogger(__name__)
+
 
 
 from datetime import timedelta
@@ -70,7 +72,7 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 
     rmm.reinitialize(
         devices=[local_rank],
-        managed_memory=True,
+        managed_memory=False,
         pool_allocator=True,
     )
 
@@ -110,6 +112,7 @@ def run_train(
     in_memory=True,
     seeds_per_call=-1,
 ):
+    
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0005)
 
     kwargs = dict(
@@ -117,6 +120,8 @@ def run_train(
         batch_size=batch_size,
     )
     # Set Up Neighbor Loading
+    train_loader_start = time.perf_counter()
+    logger.info(f"Creating NeighborLoader for rank {global_rank}...")
     from cugraph_pyg.loader import NeighborLoader
 
     ix_train = split_idx["train"].cuda()
@@ -160,7 +165,8 @@ def run_train(
         local_seeds_per_call=seeds_per_call if seeds_per_call > 0 else None,
         **kwargs,
     )
-
+    logger.info(f"Creating NeighborLoader for rank {global_rank} completed.")
+    logger.info(f"Creating NeighborLoader for rank {global_rank} took {time.perf_counter() - train_loader_start} seconds.")
     dist.barrier()
 
     eval_steps = 1000
@@ -172,7 +178,8 @@ def run_train(
         prep_time = round(time.perf_counter() - wall_clock_start, 2)
         print("Total time before training begins (prep_time) =", prep_time, "seconds")
         print("Beginning training...")
-
+    only_train_start = time.perf_counter()
+    logger.info(f"Training for rank {global_rank}...")
     for epoch in range(epochs):
         for i, batch in enumerate(train_loader):
             if i == warmup_steps:
@@ -253,11 +260,11 @@ def run_train(
                 f"Test Accuracy: {acc_test * 100.0:.4f}%",
             )
 
-    if global_rank == 0:
-        total_time = round(time.perf_counter() - wall_clock_start, 2)
-        print("Total Program Runtime (total_time) =", total_time, "seconds")
-        print("total_time - prep_time =", total_time - prep_time, "seconds")
-
+    # if global_rank == 0:
+    #     total_time = round(time.perf_counter() - wall_clock_start, 2)
+    #     print("Total Program Runtime (total_time) =", total_time, "seconds")
+    logger.info(f"Training for rank {global_rank} completed.")
+    logger.info(f"Training for rank {global_rank} took {time.perf_counter() - only_train_start} seconds.")
     wm_finalize()
     cugraph_comms_shutdown()
 
@@ -287,8 +294,13 @@ def parse_args():
         help="The password for that user.")
     parser.add_argument("--skip_tg_export", "-s", type=bool, default=False,
         help="Wheather to skip the data export from TG. Default value (False) will fetch the data.")
-
-
+    parser.add_argument("--data_dir", type=str, default="/tmp/tg",
+        help="The directory to store the data exported from TG.")
+    parser.add_argument("--file_system", type=str, default="shared",
+        help="The type of file system to use. Options are 'local' or 'shared'.")
+    parser.add_argument("--tg_nodes", type=int, default=1,
+        help="The number of TigerGraph nodes in your cluster. Default value is 1.")
+    
     return parser.parse_args()
 
 #### TG changes 2: load partitions ####
@@ -299,11 +311,15 @@ def load_partitions(
     metadata: dict, 
     wg_mem_type: str, 
 ): 
+    store_start = time.perf_counter()
+    logger.info("Initializing GraphStore and FeatureStore...") 
     from cugraph_pyg.data import GraphStore, WholeFeatureStore
 
     graph_store = GraphStore(is_multi_gpu=True)
     feature_store = WholeFeatureStore(memory_type=wg_mem_type)
-
+    logger.info("Initializing GraphStore and FeatureStore completed.")
+    logger.info(f"Initializing GraphStore and FeatureStore took {time.perf_counter() - store_start} seconds.")  
+    
     # Load TG data and renumber the node ids
     # renumbering is required so keep it True
     data = load_tg_data(metadata, renumber=True)
@@ -311,31 +327,39 @@ def load_partitions(
     split_idx = {}
 
     # Load features
-   
+    feature_start = time.perf_counter()
+    logger.info("Loading features...")
     feature_store["product", "x"] = data.x
     feature_store["product", "y"] = data.y
-
+    logger.info("Loading features completed.")
+    logger.info(f"Loading features took {time.perf_counter() - feature_start} seconds.")
     # load splits
     # Note: (train/val/test)_mask will available if present in TG attr and 
     # the attr name is specified in metadata as split attribute
     # make sure to treat split attribute as enum of 3 int values 
     # (0 for train, 1 for valid and 2 for test)
     # other values are simply ignored
+    split_load_start = time.perf_counter()
+    logger.info("Loading splits...")
     split_idx["train"] = data.node_ids[data.train_mask] 
     split_idx["val"] = data.node_ids[data.val_mask] 
     split_idx["test"] = data.node_ids[data.test_mask] 
-
+    logger.info("Loading splits completed.")
+    logger.info(f"Loading splits took {time.perf_counter() - split_load_start} seconds.")
     # redistribute split to create unifrom size
     split_idx = redistribute_splits(split_idx)
 
     # create graph store
+    graph_store_start = time.perf_counter()
+    logger.info("Creating graph store...")
     graph_store[
         ("product", "rel", "product"), 
         "coo", 
         False,
         ( data.num_nodes, data.num_nodes)
     ] =  data.edge_index
-
+    logger.info("Creating graph store completed.")
+    logger.info(f"Creating graph store took {time.perf_counter() - graph_store_start} seconds.")
 
     return (feature_store, graph_store), split_idx
 
@@ -351,8 +375,8 @@ metadata = {
             "features_list": {
                 "embedding": "LIST"
             },
-            "label": "label",
-            "split": "split",
+            "label": "node_label",
+            "split": "train_val_test",
             "num_nodes": 2449029,
             "num_classes": 47,
             "num_features": 100,
@@ -365,7 +389,9 @@ metadata = {
             "dst": "product"
         }
     },
-    "data_dir": "/data/tg",
+    "data_dir": "/data/tg-single",
+    "fs_type": "shared",
+    "num_tg_nodes": 1,
     "num_classes": 47,
     "num_features": 100, 
     "num_nodes": 2449029 
@@ -374,8 +400,11 @@ metadata = {
 
 
 if __name__ == "__main__":
-    args = parse_args()
     wall_clock_start = time.perf_counter()
+    args = parse_args()
+    metadata["data_dir"] = args.data_dir
+    metadata["fs_type"] = args.file_system
+    metadata["num_tg_nodes"] = args.tg_nodes
     if "LOCAL_RANK" in os.environ:
         dist.init_process_group("nccl", timeout=timedelta(seconds=7200))
         world_size = dist.get_world_size()
@@ -390,10 +419,13 @@ if __name__ == "__main__":
             cugraph_id = [None]
         dist.broadcast_object_list(cugraph_id, src=0, device=device)
         cugraph_id = cugraph_id[0]
-
         init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
-        
+        logger.info(f"Process {local_rank}/{global_rank} initialized.")
+        logger.info(f"Process {global_rank} took {time.perf_counter() - wall_clock_start} seconds to initialize.")
+         
         if global_rank == 0 and not args.skip_tg_export:
+            tg_export_start = time.perf_counter()
+            logger.info("Exporting data from TG database...")
             #### TG changes 4: Export TG data ####
             # write data from TG database to tmp path
             # need to call only once so global_rank 0 is used.
@@ -408,15 +440,22 @@ if __name__ == "__main__":
             )
             conn.getToken(conn.createSecret())
             export_tg_data(conn, metadata, force=True)
+            logger.info("Exporting data from TG database completed.")
+            logger.info(f"TG export took {time.perf_counter() - tg_export_start} seconds.")
 
         dist.barrier()
+        load_partitions_start = time.perf_counter()
+        logger.info(f"loading partitions for rank {global_rank}...")
+        
         data, split_idx = load_partitions(
             metadata,
             args.wg_mem_type
         )
-
+        logger.info(f"loading partitions for rank {global_rank} completed.")
+        logger.info(f"loading partitions for rank {global_rank} took {time.perf_counter() - load_partitions_start} seconds.")
         dist.barrier()
-
+        model_load_start = time.perf_counter()
+        logger.info(f"Creating model for rank {global_rank}...")
         model = torch_geometric.nn.models.GCN(
             metadata["num_features"],
             args.hidden_channels,
@@ -424,24 +463,30 @@ if __name__ == "__main__":
             metadata["num_classes"],
         ).to(device)
         model = DistributedDataParallel(model, device_ids=[local_rank])
-
-        with tempfile.TemporaryDirectory(dir=args.tempdir_root) as tempdir:
-            run_train(
-                global_rank,
-                data,
-                split_idx,
-                world_size,
-                device,
-                model,
-                args.epochs,
-                args.batch_size,
-                args.fan_out,
-                metadata["num_classes"],
-                wall_clock_start,
-                tempdir,
-                args.num_layers,
-                args.in_memory,
-                args.seeds_per_call,
-            )
+        logger.info(f"Creating model for rank {global_rank} completed.")
+        logger.info(f"model creation for rank {global_rank} took {time.perf_counter() - model_load_start} seconds.")
+        
+        train_start = time.perf_counter()
+        logger.info(f"running train for rank {global_rank}...")     
+        run_train(
+            global_rank,
+            data,
+            split_idx,
+            world_size,
+            device,
+            model,
+            args.epochs,
+            args.batch_size,
+            args.fan_out,
+            metadata["num_classes"],
+            wall_clock_start,
+            args.num_layers,
+            args.in_memory,
+            args.seeds_per_call,
+        )
+        logger.info(f"Running train for rank {global_rank} completed.")
+        logger.info(f"train for rank {global_rank} took {time.perf_counter() - train_start} seconds.")
     else:
         warnings.warn("This script should be run with 'torchrun`.  Exiting.")
+    total_time = round(time.perf_counter() - wall_clock_start, 2)
+    print("Total Program Runtime (total_time) =", total_time, "seconds")
