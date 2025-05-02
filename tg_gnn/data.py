@@ -76,6 +76,7 @@ def load_tg_data(
     nodes_meta = metadata.get("nodes", {})
     edges_meta = metadata.get("edges", {})
     fs_type = metadata.get("fs_type", "local")
+    subprocess.run(['sudo', 'chmod', '-R', '0777', data_dir])
     
     # Determine whether to use HeteroData or Data based on the number of node and edge types
     is_hetero = len(nodes_meta) > 1 or len(edges_meta) > 1
