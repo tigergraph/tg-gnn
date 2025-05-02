@@ -5,7 +5,6 @@ from torch_geometric.data import Data, HeteroData
 from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
 from tg_gnn.utils import timeit, get_local_world_size, renumber_data, load_csv, get_assigned_files, get_fs_type, get_num_partitions
 import logging
-import subprocess
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +75,6 @@ def load_tg_data(
     nodes_meta = metadata.get("nodes", {})
     edges_meta = metadata.get("edges", {})
     fs_type = metadata.get("fs_type", "local")
-    subprocess.run(['sudo', 'chmod', '-R', '0777', data_dir])
     
     # Determine whether to use HeteroData or Data based on the number of node and edge types
     is_hetero = len(nodes_meta) > 1 or len(edges_meta) > 1
