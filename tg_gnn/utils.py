@@ -337,6 +337,8 @@ def get_assigned_files(
 
 @timeit
 def read_file(fp):
+    import subprocess
+    subprocess.run(['sudo', 'chmod', '0644', fp])
     return cudf.read_csv(fp, header=None)
 
 @timeit
