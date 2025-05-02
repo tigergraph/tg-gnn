@@ -1,9 +1,13 @@
 #!/bin/bash
 
+cd ~
 sudo apt update -y
 sudo apt install -y python3.12-venv
 python3 -m venv venv
 source venv/bin/activate
+
+export PATH="/usr/local/cuda/bin:$PATH"
+export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
 pip install torch torchvision torchaudio torch_geometric pytigergraph pytest tensordict pylibwholegraph-cu12
 
