@@ -5,6 +5,7 @@ from torch_geometric.data import Data, HeteroData
 from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
 from tg_gnn.utils import timeit, get_local_world_size, renumber_data, load_csv, get_assigned_files, get_fs_type, get_num_partitions
 import logging
+import subprocess
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +95,9 @@ def load_tg_data(
             dict : A dictionary containing node data suitable for updating the `Data` or `HeteroData` object.
         """
         file_paths = get_assigned_files(data_dir, f"{vertex_name}_p*.csv", fs_type)
+
+        for file_path in file_paths:
+            subprocess.run(['sudo', 'chmod', '0644', file_path])
         
         df = load_csv(file_paths)
         
