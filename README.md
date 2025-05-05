@@ -80,6 +80,8 @@ metadata = {
         }
     },
     "data_dir": "<path to export the data from tigergraph; should be accessible by tg as well as torchrun processes>",
+    "fs_type": "<it would be shared or local>",
+    "num_tg_nodes" (optional): "<number of tg nodes>"
 }
 ```
 
