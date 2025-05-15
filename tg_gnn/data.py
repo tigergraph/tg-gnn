@@ -175,17 +175,9 @@ def load_tg_data(
                 dtype=torch.float32
             )
             if undirected:
-                ud_edge_index, edge_attr = to_undirected(edge_index, edge_attr)
+                ud_edge_index, ud_edge_attr = to_undirected(edge_index, edge_attr)
                 edge_data["edge_index"] = ud_edge_index
-                edge_data["edge_attr"] = edge_attr
-            else:
-                edge_data["edge_index"] = edge_index
-                edge_data["edge_attr"] = edge_attr
-        else:
-            if undirected:
-                edge_data["edge_index"] = to_undirected(edge_index)
-            else:
-                edge_data["edge_index"] = edge_index
+            edge_data["edge_attr"] = edge_attr
 
         if has_label:
             label_col_idx = 2
@@ -193,17 +185,27 @@ def load_tg_data(
                 df.iloc[:, label_col_idx].values, dtype=torch.long
             )
             if undirected:
-                _, edge_label = to_undirected(edge_index, edge_label)
+                ud_edge_index, edge_label = to_undirected(edge_index, edge_label)
+                if "edge_index" not in edge_data:
+                    edge_data["edge_index"] = ud_edge_index
             edge_data["edge_label"] = edge_label
-        
+
         if has_split:
             split_col_idx = 3 if has_label else 2
             splits = torch.as_tensor(df.iloc[:, split_col_idx].values, dtype=torch.long)
             if undirected:
-                _, splits = to_undirected(edge_index, splits)
+                ud_edge_index, splits = to_undirected(edge_index, splits)
+                if "edge_index" not in edge_data:
+                     edge_data["edge_index"] = ud_edge_index
             edge_data["train_mask"] = (splits == 0)
             edge_data["val_mask"]   = (splits == 1)
             edge_data["test_mask"]  = (splits == 2)
+
+        if "edge_index" not in edge_data:
+            if undirected:
+                edge_data["edge_index"] = to_undirected(edge_index)
+            else:
+                edge_data["edge_index"] = edge_index
 
         edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
         
