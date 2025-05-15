@@ -133,7 +133,7 @@ def load_tg_data(
         return node_data
     
     @timeit
-    def load_edge_csv(rel_name: str, meta: dict) -> tuple | None:
+    def load_edge_csv(rel_name: str, meta: dict, undirected: bool) -> tuple | None:
         """
         Reads an edge CSV file and extracts edge indices, attributes, labels, and masks.
 
@@ -149,8 +149,8 @@ def load_tg_data(
             tuple: A tuple containing the edge relationship tuple and a dictionary of edge data.
         """
 
-        src, dst, undirected = (
-            meta.get("src", ""), meta.get("dst", ""), meta.get("undirected", False)
+        src, dst = (
+            meta.get("src", ""), meta.get("dst", "")
         )
         rel = (src, rel_name, dst)
         
@@ -207,7 +207,7 @@ def load_tg_data(
             else:
                 edge_data["edge_index"] = edge_index
 
-        edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
+        #edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
         
         del df
         return rel, edge_data
@@ -233,12 +233,30 @@ def load_tg_data(
     # Process each edge
     for rel_name, edge_meta in edges_meta.items():
         logger.info(f"Loading the data for {rel_name}...")
-        rel, edge_data = load_edge_csv(rel_name, edge_meta)
-        if edge_data is None:
+        add_reverse = edge_meta.get("add_reverse", False)
+        if add_reverse:
+            undirected = False
+        else:
+            undirected = edge_meta.get("undirected", False)
+        rel, edge_data = load_edge_csv(rel_name, edge_meta, undirected)
+
+        if not edge_data:
             continue
+
+        if add_reverse:
+            logger.info(f"Creating data for reverse edge rev_{rel_name}...")
+            rev_rel = (rel[2], f"{rel[1]}_rev", rel[0])
+            rev_edge_data = edge_data.copy()
+            del rev_edge_data["edge_index"]
+            rev_edge_data["edge_index"] = torch.flip(edge_data["edge_index"], dims=[0])
+            rev_edge_data = {k: v.to("cpu") for k, v in rev_edge_data.items()}
         
+        edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
+
         if isinstance(data, HeteroData):
             data[rel].update(edge_data)
+            if add_reverse:
+                data[rev_rel].update(rev_edge_data)
         else:
             data.update(edge_data)
         

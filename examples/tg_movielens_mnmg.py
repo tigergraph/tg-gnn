@@ -274,7 +274,9 @@ metadata = {
         "rates": {
             "src": "user",
             "dst": "movie",
-            "split": "split"
+            "split": "split",
+            "undirected": False,
+            "add_reverse": False
         }
     },
     "data_dir": "/data/movielens",
