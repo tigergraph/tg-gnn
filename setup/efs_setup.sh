@@ -11,7 +11,7 @@ fi
 
 sudo apt-get install -y nfs-common
 
-sudo mkdir /tg_export
+sudo mkdir /tg_export || true
 if [[ "$node_type" == "gpu" ]]; then
   sudo mount -t nfs4 -o vers=4.1 ${dns_name}:/ /tg_export
   for i in $(seq 1 $tg_nodes); do

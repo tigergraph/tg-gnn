@@ -2,6 +2,7 @@ import torch
 import os
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
+from torch_geometric.utils import to_undirected
 from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
 from tg_gnn.utils import timeit, get_local_world_size, renumber_data, load_csv, get_assigned_files, get_fs_type, get_num_partitions
 import logging
@@ -148,8 +149,8 @@ def load_tg_data(
             tuple: A tuple containing the edge relationship tuple and a dictionary of edge data.
         """
 
-        src, dst = (
-            meta.get("src", ""), meta.get("dst", "")
+        src, dst, undirected = (
+            meta.get("src", ""), meta.get("dst", ""), meta.get("undirected", False)
         )
         rel = (src, rel_name, dst)
         
@@ -162,29 +163,44 @@ def load_tg_data(
         features_start = 2 + int(has_label) + int(has_split)
         has_features = df.shape[1] > features_start
 
-        edge_data = {
-            "edge_index": torch.stack([
+        edge_data = {}
+        edge_index = torch.stack([
                 torch.as_tensor(df.iloc[:, 0].values, dtype=torch.long),
                 torch.as_tensor(df.iloc[:, 1].values, dtype=torch.long)
             ], dim=0)
-        }
-
 
         if has_features:
-            edge_data["edge_attr"] = torch.as_tensor(
+            edge_attr = torch.as_tensor(
                 df.iloc[:, features_start:].values,
                 dtype=torch.float32
             )
-        
+            if undirected:
+                ud_edge_index, edge_attr = to_undirected(edge_index, edge_attr)
+                edge_data["edge_index"] = ud_edge_index
+                edge_data["edge_attr"] = edge_attr
+            else:
+                edge_data["edge_index"] = edge_index
+                edge_data["edge_attr"] = edge_attr
+        else:
+            if undirected:
+                edge_data["edge_index"] = to_undirected(edge_index)
+            else:
+                edge_data["edge_index"] = edge_index
+
         if has_label:
             label_col_idx = 2
-            edge_data["edge_label"] = torch.as_tensor(
+            edge_label = torch.as_tensor(
                 df.iloc[:, label_col_idx].values, dtype=torch.long
             )
+            if undirected:
+                _, edge_label = to_undirected(edge_index, edge_label)
+            edge_data["edge_label"] = edge_label
         
         if has_split:
             split_col_idx = 3 if has_label else 2
             splits = torch.as_tensor(df.iloc[:, split_col_idx].values, dtype=torch.long)
+            if undirected:
+                _, splits = to_undirected(edge_index, splits)
             edge_data["train_mask"] = (splits == 0)
             edge_data["val_mask"]   = (splits == 1)
             edge_data["test_mask"]  = (splits == 2)
