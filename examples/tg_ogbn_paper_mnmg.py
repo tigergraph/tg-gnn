@@ -301,8 +301,8 @@ def load_partitions(
 ): 
     from cugraph_pyg.data import GraphStore, WholeFeatureStore
 
-    graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    graph_store = GraphStore()
+    feature_store = WholeFeatureStore()
 
     # Load TG data and renumber the node ids
     # renumbering is required so keep it True

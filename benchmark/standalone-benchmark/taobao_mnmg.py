@@ -211,8 +211,8 @@ def pre_transform(data):
 def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
     from cugraph_pyg.data import GraphStore, WholeFeatureStore
 
-    graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    graph_store = GraphStore()
+    feature_store = WholeFeatureStore()
 
     graph_store[
         ("user", "to", "item"),
