@@ -77,6 +77,7 @@ def load_partitions(metadata, wg_mem_type):
     
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
+    add_reverse = metadata.get("edges").get("rates").get("add_reverse", False)
     data = load_tg_data(metadata, renumber=True)
     print(f"Exported tg data loaded successfully.")
     print(f"TG data: {data}")
@@ -94,12 +95,12 @@ def load_partitions(metadata, wg_mem_type):
     # add reverse edges if it is required for your model
     # (no need to do if TG database has this info already, you can export it
     # and Data/Hetero object will have that info)
-    data["movie", "rev_rates", "user"].edge_index = torch.stack(
-        [
-            data["user", "rates", "movie"].edge_index[1],
-            data["user", "rates", "movie"].edge_index[0],
-        ]
-    )
+    #data["movie", "rev_rates", "user"].edge_index = torch.stack(
+    #    [
+    #        data["user", "rates", "movie"].edge_index[1],
+    #        data["user", "rates", "movie"].edge_index[0],
+    #    ]
+    #)
 
     # create feature store and graph store using data
     graph_store = GraphStore(is_multi_gpu=True)
@@ -112,12 +113,13 @@ def load_partitions(metadata, wg_mem_type):
         (data["user"].num_nodes, data["movie"].num_nodes),
     ] = data["user", "rates", "movie"].edge_index
 
-    graph_store[
-        ("movie", "rev_rates", "user"),
-        "coo",
-        False,
-        (data["movie"].num_nodes, data["user"].num_nodes),
-    ] = data["movie", "rev_rates", "user"].edge_index
+    if add_reverse:
+        graph_store[
+            ("movie", "rev_rates", "user"),
+            "coo",
+            False,
+            (data["movie"].num_nodes, data["user"].num_nodes),
+        ] = data["movie", "rev_rates", "user"].edge_index
 
     feature_store["user", "x", None] = data["user"].x
     feature_store["movie", "x", None] = data["movie"].x

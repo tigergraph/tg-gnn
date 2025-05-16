@@ -233,20 +233,20 @@ def load_tg_data(
 
     # Process each edge
     for rel_name, edge_meta in edges_meta.items():
-        logger.info(f"Loading the data for {rel_name}...")
         add_reverse = edge_meta.get("add_reverse", False)
-        if add_reverse:
+        if isinstance(data, HeteroData) and add_reverse:
             undirected = False
         else:
             undirected = edge_meta.get("undirected", False)
+        logger.info(f"Loading the data for {rel_name} with undirected={undirected}...")
         rel, edge_data = load_edge_csv(rel_name, edge_meta, undirected)
 
         if not edge_data:
             continue
 
-        if add_reverse:
+        if isinstance(data, HeteroData) and add_reverse:
             logger.info(f"Creating data for reverse edge rev_{rel_name}...")
-            rev_rel = (rel[2], f"{rel[1]}_rev", rel[0])
+            rev_rel = (rel[2], f"rev_{rel[1]}", rel[0])
             rev_edge_data = edge_data.copy()
             del rev_edge_data["edge_index"]
             rev_edge_data["edge_index"] = torch.flip(edge_data["edge_index"], dims=[0])
