@@ -77,7 +77,7 @@ def load_partitions(metadata, wg_mem_type):
     
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
-    add_reverse = metadata.get("edges").get("rates").get("add_reverse", False)
+    undirected = metadata.get("edges").get("rates").get("undirected", False)
     data = load_tg_data(metadata, renumber=True)
     print(f"Exported tg data loaded successfully.")
     print(f"TG data: {data}")
@@ -113,7 +113,7 @@ def load_partitions(metadata, wg_mem_type):
         (data["user"].num_nodes, data["movie"].num_nodes),
     ] = data["user", "rates", "movie"].edge_index
 
-    if add_reverse:
+    if undirected:
         graph_store[
             ("movie", "rev_rates", "user"),
             "coo",
@@ -275,14 +275,13 @@ metadata = {
     }, 
     "edges": {
         "rates": {
+            "undirected": True,
             "src": "user",
             "dst": "movie",
-            "split": "split",
-            "undirected": False,
-            "add_reverse": False
+            "split": "split"
         }
     },
-    "data_dir": "/data/tg-single",
+    "data_dir": "/data/movielens",
     "fs_type": "shared",
     "num_tg_nodes": 1
 }

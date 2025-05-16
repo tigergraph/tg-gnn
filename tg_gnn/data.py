@@ -3,7 +3,7 @@ import os
 import subprocess
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
-from torch_geometric.utils import to_undirected
+from torch_geometric.transforms import ToUndirected
 from tg_gnn.tg_gsql import create_gsql_query, install_and_run_query
 from tg_gnn.utils import timeit, get_local_world_size, renumber_data, load_csv, get_assigned_files, get_fs_type, get_num_partitions
 import logging
@@ -77,6 +77,7 @@ def load_tg_data(
     nodes_meta = metadata.get("nodes", {})
     edges_meta = metadata.get("edges", {})
     fs_type = metadata.get("fs_type", "local")
+    subprocess.run(['sudo', 'chmod', '-R', '0666', args.data_dir])
     
     # Determine whether to use HeteroData or Data based on the number of node and edge types
     is_hetero = len(nodes_meta) > 1 or len(edges_meta) > 1
@@ -97,9 +98,6 @@ def load_tg_data(
         """
         file_paths = get_assigned_files(data_dir, f"{vertex_name}_p*.csv", fs_type)
 
-        for file_path in file_paths:
-            subprocess.run(['sudo', 'chmod', '0644', file_path])
-        
         df = load_csv(file_paths)
         
         has_label = bool(meta.get("label", False))
@@ -110,7 +108,6 @@ def load_tg_data(
         node_data = {
             "node_ids": torch.as_tensor(df.iloc[:, 0].values, dtype=torch.long),
         }
-        
         
         if has_features:
             node_data["x"] = torch.as_tensor(
@@ -134,7 +131,7 @@ def load_tg_data(
         return node_data
     
     @timeit
-    def load_edge_csv(rel_name: str, meta: dict, undirected: bool) -> tuple | None:
+    def load_edge_csv(rel_name: str, meta: dict) -> tuple | None:
         """
         Reads an edge CSV file and extracts edge indices, attributes, labels, and masks.
 
@@ -164,51 +161,33 @@ def load_tg_data(
         features_start = 2 + int(has_label) + int(has_split)
         has_features = df.shape[1] > features_start
 
-        edge_data = {}
-        edge_index = torch.stack([
+        edge_data = {
+            "edge_index": torch.stack([
                 torch.as_tensor(df.iloc[:, 0].values, dtype=torch.long),
                 torch.as_tensor(df.iloc[:, 1].values, dtype=torch.long)
             ], dim=0)
+        }
 
         if has_features:
-            edge_attr = torch.as_tensor(
+            edge_data["edge_attr"] = torch.as_tensor(
                 df.iloc[:, features_start:].values,
                 dtype=torch.float32
             )
-            if undirected:
-                ud_edge_index, ud_edge_attr = to_undirected(edge_index, edge_attr)
-                edge_data["edge_index"] = ud_edge_index
-            edge_data["edge_attr"] = edge_attr
 
         if has_label:
             label_col_idx = 2
-            edge_label = torch.as_tensor(
+            edge_data["edge_label"] = torch.as_tensor(
                 df.iloc[:, label_col_idx].values, dtype=torch.long
             )
-            if undirected:
-                ud_edge_index, edge_label = to_undirected(edge_index, edge_label)
-                if "edge_index" not in edge_data:
-                    edge_data["edge_index"] = ud_edge_index
-            edge_data["edge_label"] = edge_label
 
         if has_split:
             split_col_idx = 3 if has_label else 2
             splits = torch.as_tensor(df.iloc[:, split_col_idx].values, dtype=torch.long)
-            if undirected:
-                ud_edge_index, splits = to_undirected(edge_index, splits)
-                if "edge_index" not in edge_data:
-                     edge_data["edge_index"] = ud_edge_index
             edge_data["train_mask"] = (splits == 0)
             edge_data["val_mask"]   = (splits == 1)
             edge_data["test_mask"]  = (splits == 2)
 
-        if "edge_index" not in edge_data:
-            if undirected:
-                edge_data["edge_index"] = to_undirected(edge_index)
-            else:
-                edge_data["edge_index"] = edge_index
-
-        #edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
+        edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
         
         del df
         return rel, edge_data
@@ -233,33 +212,26 @@ def load_tg_data(
 
     # Process each edge
     for rel_name, edge_meta in edges_meta.items():
-        add_reverse = edge_meta.get("add_reverse", False)
-        if isinstance(data, HeteroData) and add_reverse:
-            undirected = False
-        else:
-            undirected = edge_meta.get("undirected", False)
+        undirected = edge_meta.get("undirected", False)
         logger.info(f"Loading the data for {rel_name} with undirected={undirected}...")
-        rel, edge_data = load_edge_csv(rel_name, edge_meta, undirected)
-
+        rel, edge_data = load_edge_csv(rel_name, edge_meta)
         if not edge_data:
             continue
 
-        if isinstance(data, HeteroData) and add_reverse:
-            logger.info(f"Creating data for reverse edge rev_{rel_name}...")
-            rev_rel = (rel[2], f"rev_{rel[1]}", rel[0])
-            rev_edge_data = edge_data.copy()
-            del rev_edge_data["edge_index"]
-            rev_edge_data["edge_index"] = torch.flip(edge_data["edge_index"], dims=[0])
-            rev_edge_data = {k: v.to("cpu") for k, v in rev_edge_data.items()}
-        
-        edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
-
         if isinstance(data, HeteroData):
-            data[rel].update(edge_data)
-            if add_reverse:
-                data[rev_rel].update(rev_edge_data)
+            if undirected:
+                ud_data = HeteroData()
+                ud_data[rel].update(edge_data)
+                ud_data = ToUndirected()(ud_data)
+                data.update(ud_data)
+                logger.info(f"Creating data for rev_{rel_name} completed successfully.")
+            else:
+                data[rel].update(edge_data)
         else:
             data.update(edge_data)
+            if undirected:
+                data = ToUndirected()(data)
+                logger.info(f"Creating data for rev_{rel_name} completed successfully.")
         
         logger.info(f"Data loading for {rel_name} completed successfully.")
     

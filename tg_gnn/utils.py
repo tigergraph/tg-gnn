@@ -166,7 +166,6 @@ def renumber_data(
             continue
 
         local_num_nodes = len(node_ids)
-        logger.info(f"'node_ids' for '{vertex_name}' is {local_num_nodes}...")
 
         # Gather node counts from all ranks
         current_num_nodes = torch.tensor([local_num_nodes], dtype=torch.int64, device=device)
@@ -234,8 +233,6 @@ def renumber_data(
         # Convert to CuPy for indexing
         srcs = cupy.asarray(edge_index[0].cpu())
         dsts = cupy.asarray(edge_index[1].cpu())
-        num_srcs = len(srcs)
-        logger.info(f"'srcs' for '{src_name}' is {num_srcs}...")
 
         # Retrieve the renumber maps for src and dst
         #   - map is a cudf DF: old_id => new_id

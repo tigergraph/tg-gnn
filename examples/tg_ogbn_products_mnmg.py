@@ -20,7 +20,6 @@ import warnings
 import tempfile
 import time
 import json
-import subprocess
 
 
 import torch
@@ -386,6 +385,7 @@ metadata = {
     "edges": {
         "rel": {
             "rel_name": "rel",
+            "undirected": True,
             "src": "product",
             "dst": "product"
         }
@@ -406,7 +406,7 @@ if __name__ == "__main__":
     metadata["data_dir"] = args.data_dir
     metadata["fs_type"] = args.file_system
     metadata["num_tg_nodes"] = args.tg_nodes
-    subprocess.run(['sudo', 'chmod', '-R', '0777', args.data_dir])
+
     if "LOCAL_RANK" in os.environ:
         dist.init_process_group("nccl", timeout=timedelta(seconds=7200))
         world_size = dist.get_world_size()
