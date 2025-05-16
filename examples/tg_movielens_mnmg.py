@@ -279,7 +279,9 @@ metadata = {
             "add_reverse": False
         }
     },
-    "data_dir": "/data/movielens",
+    "data_dir": "/data/tg-single",
+    "fs_type": "shared",
+    "num_tg_nodes": 1
 }
 
 if __name__ == "__main__":
@@ -305,8 +307,17 @@ if __name__ == "__main__":
         help="The password for that user.")
     parser.add_argument("--skip_tg_export", "-s", type=bool, default=False,
         help="Wheather to skip the data export from TG. Default value (False) will fetch the data.")
+    parser.add_argument("--data_dir", type=str, default="/tmp/tg",
+        help="The directory to store the data exported from TG.")
+    parser.add_argument("--file_system", type=str, default="shared",
+        help="The type of file system to use. Options are 'local' or 'shared'.")
+    parser.add_argument("--tg_nodes", type=int, default=1,
+        help="The number of TigerGraph nodes in your cluster. Default value is 1.")
 
     args = parser.parse_args()
+    metadata["data_dir"] = args.data_dir
+    metadata["fs_type"] = args.file_system
+    metadata["num_tg_nodes"] = args.tg_nodes
 
     torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
     world_size = torch.distributed.get_world_size()

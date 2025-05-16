@@ -1,5 +1,6 @@
 import torch
 import os
+import subprocess
 import torch.distributed as dist
 from torch_geometric.data import Data, HeteroData
 from torch_geometric.utils import to_undirected
