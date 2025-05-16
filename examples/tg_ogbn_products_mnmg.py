@@ -323,6 +323,8 @@ def load_partitions(
     # Load TG data and renumber the node ids
     # renumbering is required so keep it True
     data = load_tg_data(metadata, renumber=True)
+    print(f"Exported tg data loaded successfully.")
+    print(f"TG data: {data}")
 
     split_idx = {}
 
