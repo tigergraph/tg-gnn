@@ -313,10 +313,10 @@ def load_partitions(
 ): 
     store_start = time.perf_counter()
     logger.info("Initializing GraphStore and FeatureStore...") 
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+    from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore()
-    feature_store = WholeFeatureStore()
+    feature_store = FeatureStore()
     logger.info("Initializing GraphStore and FeatureStore completed.")
     logger.info(f"Initializing GraphStore and FeatureStore took {time.perf_counter() - store_start} seconds.")  
     

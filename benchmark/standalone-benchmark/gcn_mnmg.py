@@ -140,10 +140,10 @@ def partition_data(dataset, split_idx, edge_path, feature_path, label_path, meta
 def load_partitioned_data(
     rank, edge_path, feature_path, label_path, meta_path, wg_mem_type
 ):
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+    from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore()
-    feature_store = WholeFeatureStore()
+    feature_store = FeatureStore()
 
     # Load metadata
     with open(meta_path, "r") as f:
@@ -396,7 +396,7 @@ if __name__ == "__main__":
 
         # We partition the data to avoid loading it in every worker, which will
         # waste memory and can lead to an out of memory exception.
-        # cugraph_pyg.GraphStore and cugraph_pyg.WholeFeatureStore are always
+        # cugraph_pyg.GraphStore and cugraph_pyg.FeatureStore are always
         # constructed from partitions of the edge index and features, respectively,
         # so this works well.
         if args.skip_partition and global_rank == 0:

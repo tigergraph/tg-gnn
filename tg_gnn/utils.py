@@ -59,7 +59,7 @@ def get_local_rank() -> int:
     return local_rank
 
 @timeit
-def redistribute_splits(splits: dict, device: str | torch.device = "cpu") -> dict:
+def redistribute_splits(splits: dict, target: str = "cpu") -> dict:
     """
     Gathers and redistributes data for train, val, and test splits across ranks.
     This support redistributions of node indices of shape [n] and edge indices of shape [2,n]
@@ -106,7 +106,7 @@ def redistribute_splits(splits: dict, device: str | torch.device = "cpu") -> dic
         dist.all_gather(all_indices_list, local_indices.to(device))
         
         # Combine and split indices
-        combined = torch.cat(all_indices_list, dim=gather_dim).to(device)
+        combined = torch.cat(all_indices_list, dim=gather_dim).to(target)
         splits_shuffled[key] = torch.tensor_split(combined, world_size, dim=split_dim)[local_rank]
 
         # Cleanup resources
@@ -114,14 +114,14 @@ def redistribute_splits(splits: dict, device: str | torch.device = "cpu") -> dic
         torch.cuda.empty_cache()
         logger.info(f"Completed {log_type} {key} redistribution")
 
-    logger.info("All splits redistributed successfully on {device}")
+    logger.info(f"All splits redistributed successfully on {target}")
     return splits_shuffled
 
 @timeit
 def renumber_data(
     data: Data | HeteroData,
     metadata: dict,
-    device: str | torch.device = "cpu"
+    target: str = "cpu"
 ) -> Data | HeteroData:
     """
     Renumbers node indices (and subsequently edge indices) across multiple ranks
@@ -179,7 +179,7 @@ def renumber_data(
             for i in range(node_offsets.numel())
         ]
 
-        node_offsets_cum = node_offsets.cumsum(0).to(device)
+        node_offsets_cum = node_offsets.cumsum(0).to(target)
         this_rank = dist.get_rank() 
         local_offset = 0 if this_rank == 0 else int(node_offsets_cum[this_rank - 1])
 
@@ -198,7 +198,7 @@ def renumber_data(
 
         # Gather local map from all ranks 
         dist.all_gather(map_tensor, local_renumber_map)
-        map_tensor = torch.cat(map_tensor, dim=1).to(device)
+        map_tensor = torch.cat(map_tensor, dim=1).to(target)
 
         global_renumber_map[vertex_name] = cudf.DataFrame(
             data={"id": cupy.asarray(map_tensor[0])},
@@ -207,12 +207,12 @@ def renumber_data(
 
         # update the node ids
         if is_hetero:
-            data[vertex_name].node_ids = local_renumber_map[0].to(device)
+            data[vertex_name].node_ids = local_renumber_map[0].to(target)
         else:
-            data.node_ids = local_renumber_map[0].to(device)
+            data.node_ids = local_renumber_map[0].to(target)
 
         del map_tensor, node_offsets, node_offsets_cum, current_num_nodes, local_renumber_map
-        logger.info(f"Renumbering the {vertex_name} ids completed successfully on {device}.")
+        logger.info(f"Renumbering the {vertex_name} ids completed successfully on {target}.")
  
     # Process/Renumber edges
     for rel_name, edge_meta in metadata["edges"].items():
@@ -232,8 +232,8 @@ def renumber_data(
             continue
 
         # Convert to CuPy for indexing
-        srcs = cupy.asarray(edge_index[0].to(device))
-        dsts = cupy.asarray(edge_index[1].to(device))
+        srcs = cupy.asarray(edge_index[0].to(target))
+        dsts = cupy.asarray(edge_index[1].to(target))
 
         # Retrieve the renumber maps for src and dst
         #   - map is a cudf DF: old_id => new_id
@@ -266,12 +266,12 @@ def renumber_data(
 
         # Store in data
         if is_hetero:
-            data[rel].edge_index = new_edge_index.to(device)
+            data[rel].edge_index = new_edge_index.to(target)
         else:
-            data.edge_index = new_edge_index.to(device)
+            data.edge_index = new_edge_index.to(target)
 
         del src_map, dst_map, srcs, dsts
-        logger.info(f"Renumbering of {rel_name} indices completed successfully on {device}.")
+        logger.info(f"Renumbering of {rel_name} indices completed successfully on {target}.")
 
     del global_renumber_map
     torch.cuda.empty_cache()
@@ -367,9 +367,11 @@ def get_num_partitions(fs_type: str = "local", num_tg_nodes: int | None = None) 
                 num_partitions = (num_partitions // num_tg_nodes) + 1
     return num_partitions
 
-def find_misaligned_tensors(data: HeteroData, expected_device: torch.device):
+def find_misaligned_tensors(data: HeteroData, expected_device: str | torch.device):
     misaligned = []
 
+    if isinstance(expected_device, str):
+        expected_device = torch.device(expected_device)
     for node_type in data.node_types:
         for key, tensor in data[node_type].items():
             if isinstance(tensor, torch.Tensor) and tensor.device != expected_device:
