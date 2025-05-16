@@ -1,4 +1,5 @@
 import os
+import subprocess
 import warnings
 from argparse import ArgumentParser
 from datetime import timedelta
@@ -318,6 +319,7 @@ if __name__ == "__main__":
     metadata["data_dir"] = args.data_dir
     metadata["fs_type"] = args.file_system
     metadata["num_tg_nodes"] = args.tg_nodes
+    subprocess.run(['sudo', 'chmod', '-R', '0777', args.data_dir])
 
     torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
     world_size = torch.distributed.get_world_size()
