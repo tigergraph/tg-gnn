@@ -366,3 +366,24 @@ def get_num_partitions(fs_type: str = "local", num_tg_nodes: int | None = None) 
                 # one file and few will have more than 1.
                 num_partitions = (num_partitions // num_tg_nodes) + 1
     return num_partitions
+
+def find_misaligned_tensors(data: HeteroData, expected_device: torch.device):
+    misaligned = []
+
+    for node_type in data.node_types:
+        for key, tensor in data[node_type].items():
+            if isinstance(tensor, torch.Tensor) and tensor.device != expected_device:
+                misaligned.append((f"Node[{node_type}][{key}]", tensor.device))
+
+    for edge_type in data.edge_types:
+        for key, tensor in data[edge_type].items():
+            if isinstance(tensor, torch.Tensor) and tensor.device != expected_device:
+                misaligned.append((f"Edge[{edge_type}][{key}]", tensor.device))
+
+    if misaligned:
+        print("Tensors not on expected device:")
+        for name, device in misaligned:
+            print(f"{name} is on {device}")
+    else:
+        print("All tensors are on the correct device.")
+    return misaligned
