@@ -212,7 +212,7 @@ def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
     from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = FeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore()
 
     graph_store[
         ("user", "to", "item"),

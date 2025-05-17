@@ -143,7 +143,7 @@ def load_partitioned_data(
     from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = FeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore()
 
     # Load metadata
     with open(meta_path, "r") as f:
