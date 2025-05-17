@@ -165,7 +165,7 @@ class Model(torch.nn.Module):
 def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
     from cugraph_pyg.data import GraphStore, FeatureStore
 
-    graph_store = GraphStore()
+    graph_store = GraphStore(is_multi_gpu=True)
     feature_store = FeatureStore()
     print(f"data user size: {data['user'].num_nodes}.")
     print(f"data item size: {data['item'].num_nodes}.")

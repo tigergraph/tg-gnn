@@ -300,9 +300,9 @@ def partition_data(
 def load_partitioned_data(rank, edge_path, rel_path, pos_path, neg_path, meta_path):
     from cugraph_pyg.data import GraphStore, FeatureStore, TensorDictFeatureStore
 
-    graph_store = GraphStore()
-    feature_store = TensorDictFeatureStore()
-    edge_feature_store = FeatureStore()
+    graph_store = GraphStore(is_multi_gpu=True)
+    feature_store = TensorDictFeatureStore(memory_type=wg_mem_type)
+    edge_feature_store = FeatureStore(memory_type=wg_mem_type)
 
     # Load edge index
     graph_store[("n", "e", "n"), "coo"] = torch.load(

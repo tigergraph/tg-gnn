@@ -103,7 +103,7 @@ def load_partitions(metadata, wg_mem_type):
     #)
 
     # create feature store and graph store using data
-    graph_store = GraphStore()
+    graph_store = GraphStore(is_multi_gpu=True)
     feature_store = FeatureStore()
 
     graph_store[
