@@ -35,7 +35,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 from tg_gnn.data import export_tg_data, load_tg_data
-from tg_gnn.utils import redistribute_splits
+from tg_gnn.utils import redistribute_splits, find_misaligned_tensors
 
 def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
     import rmm
@@ -81,6 +81,9 @@ def load_partitions(metadata, wg_mem_type):
     data = load_tg_data(metadata, renumber=True)
     print(f"Exported tg data loaded successfully.")
     print(f"TG data: {data}")
+    find_misaligned_tensors(data, "cpu")
+    check_heterodata_integrity(data)
+
 
     # there is no features exported for user using TG
     data["user"].x = (

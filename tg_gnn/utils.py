@@ -389,3 +389,40 @@ def find_misaligned_tensors(data: HeteroData, expected_device: str | torch.devic
     else:
         print("All tensors are on the correct device.")
     return misaligned
+
+def check_heterodata_integrity(data: HeteroData):
+    issues = []
+
+    for node_type in data.node_types:
+        x = data[node_type].get('x', None)
+        if x is not None and not isinstance(x, torch.Tensor):
+            issues.append(f"[{node_type}] 'x' is not a Tensor.")
+    
+    for edge_type in data.edge_types:
+        if 'edge_index' not in data[edge_type]:
+            issues.append(f"[{edge_type}] Missing 'edge_index'.")
+            continue
+        
+        edge_index = data[edge_type]['edge_index']
+        if edge_index.dim() != 2 or edge_index.size(0) != 2:
+            issues.append(f"[{edge_type}] 'edge_index' must be of shape [2, num_edges].")
+
+        src_type, _, dst_type = edge_type
+        num_src_nodes = data[src_type].get('x', torch.empty(0)).size(0)
+        num_dst_nodes = data[dst_type].get('x', torch.empty(0)).size(0)
+
+        if edge_index.size(1) > 0:
+            src_max = edge_index[0].max().item()
+            dst_max = edge_index[1].max().item()
+
+            if src_max >= num_src_nodes:
+                issues.append(f"[{edge_type}] 'edge_index[0]' has index {src_max} >= num {src_type} nodes ({num_src_nodes})")
+            if dst_max >= num_dst_nodes:
+                issues.append(f"[{edge_type}] 'edge_index[1]' has index {dst_max} >= num {dst_type} nodes ({num_dst_nodes})")
+    
+    if not issues:
+        print("HeteroData integrity check passed.")
+    else:
+        print("HeteroData integrity issues found:")
+        for i, issue in enumerate(issues, 1):
+            print(f"{i}. {issue}")
