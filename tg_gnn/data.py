@@ -239,8 +239,11 @@ def load_tg_data(
         if is_hetero:
             for rel in undirected_edge:
                 rev_rel = (rel[2], f"rev_{rel[1]}", rel[0])
-                rev_edge_index = torch.stack([data[rel].edge_index[1], data[rel].edge_index[0]], dim=0).to(mem_loc)
-                data[rev_rel].edge_index = rev_edge_index
+                rev_edge_index = data[rel].edge_index[[1, 0], :]
+                data[rev_rel].edge_index = rev_edge_index.to(mem_loc)
+                for attr, value in data[rel].items():
+                    if attr != "edge_index":
+                        data[rev_rel][attr] = value.clone().to(mem_loc)
                 logger.info(f"Creating data for rev_{rel_name} completed successfully.")
         else:
             data = ToUndirected()(data)
