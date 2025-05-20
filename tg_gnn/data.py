@@ -43,6 +43,7 @@ def load_tg_data(
         metadata: dict, 
         renumber: bool = True,
         shuffle_splits: bool = False,
+        mem_loc: str = "cpu",
         **kwargs) -> Data | HeteroData:
     """
     Loads partitioned graph data and prepares it for use with PyTorch Geometric.
@@ -125,7 +126,7 @@ def load_tg_data(
             node_data["val_mask"]   = (splits == 1)
             node_data["test_mask"]  = (splits == 2)
 
-        node_data = {k: v.to("cpu") for k, v in node_data.items()}
+        node_data = {k: v.to(mem_loc) for k, v in node_data.items()}
         
         del df
         return node_data
@@ -187,7 +188,7 @@ def load_tg_data(
             edge_data["val_mask"]   = (splits == 1)
             edge_data["test_mask"]  = (splits == 2)
 
-        edge_data = {k: v.to("cpu") for k, v in edge_data.items()}
+        edge_data = {k: v.to(mem_loc) for k, v in edge_data.items()}
         
         del df
         return rel, edge_data
@@ -211,6 +212,7 @@ def load_tg_data(
         logger.info(f"Data loading for {vertex_name} completed successfully.")
 
     # Process each edge
+    undirected_edge = []
     for rel_name, edge_meta in edges_meta.items():
         undirected = edge_meta.get("undirected", False)
         logger.info(f"Loading the data for {rel_name} with undirected={undirected}...")
@@ -218,27 +220,31 @@ def load_tg_data(
         if not edge_data:
             continue
 
+        if undirected:
+            undirected_edge.append(rel)
+
         if isinstance(data, HeteroData):
-            if undirected:
-                ud_data = HeteroData()
-                ud_data[rel].update(edge_data)
-                ud_data = ToUndirected()(ud_data)
-                data.update(ud_data)
-                logger.info(f"Creating data for rev_{rel_name} completed successfully.")
-            else:
-                data[rel].update(edge_data)
+            data[rel].update(edge_data)
         else:
             data.update(edge_data)
-            if undirected:
-                data = ToUndirected()(data)
-                logger.info(f"Creating data for rev_{rel_name} completed successfully.")
         
         logger.info(f"Data loading for {rel_name} completed successfully.")
     
     # renumber the data
     # this is required as feature store does not support random ordering
     if renumber:
-        data = renumber_data(data, metadata)
+        data = renumber_data(data, metadata, mem_loc)
+
+    if undirected_edge:
+        if is_hetero:
+            for rel in undirected_edge:
+                rev_rel = (rel[2], f"rev_{rel[1]}", rel[0])
+                rev_edge_index = torch.stack([data[rel].edge_index[1], data[rel].edge_index[0]], dim=0).to(mem_loc)
+                data[rev_rel].edge_index = rev_edge_index
+                logger.info(f"Creating data for rev_{rel_name} completed successfully.")
+        else:
+            data = ToUndirected()(data)
+            logger.info(f"Creating data for rev_{rel_name} completed successfully.")
 
     torch.cuda.empty_cache()
 

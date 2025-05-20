@@ -59,7 +59,7 @@ def get_local_rank() -> int:
     return local_rank
 
 @timeit
-def redistribute_splits(splits: dict, target: str = "cpu") -> dict:
+def redistribute_splits(splits: dict, mem_loc: str = "cpu") -> dict:
     """
     Gathers and redistributes data for train, val, and test splits across ranks.
     This support redistributions of node indices of shape [n] and edge indices of shape [2,n]
@@ -106,7 +106,7 @@ def redistribute_splits(splits: dict, target: str = "cpu") -> dict:
         dist.all_gather(all_indices_list, local_indices.to(device))
         
         # Combine and split indices
-        combined = torch.cat(all_indices_list, dim=gather_dim).to(target)
+        combined = torch.cat(all_indices_list, dim=gather_dim).to(mem_loc)
         splits_shuffled[key] = torch.tensor_split(combined, world_size, dim=split_dim)[local_rank]
 
         # Cleanup resources
@@ -114,14 +114,14 @@ def redistribute_splits(splits: dict, target: str = "cpu") -> dict:
         torch.cuda.empty_cache()
         logger.info(f"Completed {log_type} {key} redistribution")
 
-    logger.info(f"All splits redistributed successfully on {target}")
+    logger.info(f"All splits redistributed successfully on {mem_loc}")
     return splits_shuffled
 
 @timeit
 def renumber_data(
     data: Data | HeteroData,
     metadata: dict,
-    target: str = "cpu"
+    mem_loc: str = "cpu"
 ) -> Data | HeteroData:
     """
     Renumbers node indices (and subsequently edge indices) across multiple ranks
@@ -179,7 +179,7 @@ def renumber_data(
             for i in range(node_offsets.numel())
         ]
 
-        node_offsets_cum = node_offsets.cumsum(0).to(target)
+        node_offsets_cum = node_offsets.cumsum(0).to(mem_loc)
         this_rank = dist.get_rank() 
         local_offset = 0 if this_rank == 0 else int(node_offsets_cum[this_rank - 1])
 
@@ -198,7 +198,7 @@ def renumber_data(
 
         # Gather local map from all ranks 
         dist.all_gather(map_tensor, local_renumber_map)
-        map_tensor = torch.cat(map_tensor, dim=1).to(target)
+        map_tensor = torch.cat(map_tensor, dim=1).to(mem_loc)
 
         global_renumber_map[vertex_name] = cudf.DataFrame(
             data={"id": cupy.asarray(map_tensor[0])},
@@ -207,12 +207,12 @@ def renumber_data(
 
         # update the node ids
         if is_hetero:
-            data[vertex_name].node_ids = local_renumber_map[0].to(target)
+            data[vertex_name].node_ids = local_renumber_map[0].to(mem_loc)
         else:
-            data.node_ids = local_renumber_map[0].to(target)
+            data.node_ids = local_renumber_map[0].to(mem_loc)
 
         del map_tensor, node_offsets, node_offsets_cum, current_num_nodes, local_renumber_map
-        logger.info(f"Renumbering the {vertex_name} ids completed successfully on {target}.")
+        logger.info(f"Renumbering the {vertex_name} ids completed successfully on {mem_loc}.")
  
     # Process/Renumber edges
     for rel_name, edge_meta in metadata["edges"].items():
@@ -232,8 +232,8 @@ def renumber_data(
             continue
 
         # Convert to CuPy for indexing
-        srcs = cupy.asarray(edge_index[0].to(target))
-        dsts = cupy.asarray(edge_index[1].to(target))
+        srcs = cupy.asarray(edge_index[0].to(mem_loc))
+        dsts = cupy.asarray(edge_index[1].to(mem_loc))
 
         # Retrieve the renumber maps for src and dst
         #   - map is a cudf DF: old_id => new_id
@@ -266,12 +266,12 @@ def renumber_data(
 
         # Store in data
         if is_hetero:
-            data[rel].edge_index = new_edge_index.to(target)
+            data[rel].edge_index = new_edge_index.to(mem_loc)
         else:
-            data.edge_index = new_edge_index.to(target)
+            data.edge_index = new_edge_index.to(mem_loc)
 
         del src_map, dst_map, srcs, dsts
-        logger.info(f"Renumbering of {rel_name} indices completed successfully on {target}.")
+        logger.info(f"Renumbering of {rel_name} indices completed successfully on {mem_loc}.")
 
     del global_renumber_map
     torch.cuda.empty_cache()

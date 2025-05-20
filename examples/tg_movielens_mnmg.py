@@ -35,7 +35,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 from tg_gnn.data import export_tg_data, load_tg_data
-from tg_gnn.utils import redistribute_splits, find_misaligned_tensors
+from tg_gnn.utils import redistribute_splits
 
 def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
     import rmm
@@ -81,9 +81,6 @@ def load_partitions(metadata, wg_mem_type):
     data = load_tg_data(metadata, renumber=True)
     print(f"Exported tg data loaded successfully.")
     print(f"TG data: {data}")
-    find_misaligned_tensors(data, "cpu")
-    check_heterodata_integrity(data)
-
 
     # there is no features exported for user using TG
     data["user"].x = (
@@ -93,17 +90,6 @@ def load_partitions(metadata, wg_mem_type):
         .detach()
         .clone()
     )
-
-    # adding rev rates
-    # add reverse edges if it is required for your model
-    # (no need to do if TG database has this info already, you can export it
-    # and Data/Hetero object will have that info)
-    #data["movie", "rev_rates", "user"].edge_index = torch.stack(
-    #    [
-    #        data["user", "rates", "movie"].edge_index[1],
-    #        data["user", "rates", "movie"].edge_index[0],
-    #    ]
-    #)
 
     # create feature store and graph store using data
     graph_store = GraphStore(is_multi_gpu=True)
