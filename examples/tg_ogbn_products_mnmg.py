@@ -313,16 +313,18 @@ def load_partitions(
 ): 
     store_start = time.perf_counter()
     logger.info("Initializing GraphStore and FeatureStore...") 
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+    from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore()
     logger.info("Initializing GraphStore and FeatureStore completed.")
     logger.info(f"Initializing GraphStore and FeatureStore took {time.perf_counter() - store_start} seconds.")  
     
     # Load TG data and renumber the node ids
     # renumbering is required so keep it True
     data = load_tg_data(metadata, renumber=True)
+    print(f"Exported tg data loaded successfully.")
+    print(f"TG data: {data}")
 
     split_idx = {}
 
@@ -385,6 +387,7 @@ metadata = {
     "edges": {
         "rel": {
             "rel_name": "rel",
+            "undirected": True,
             "src": "product",
             "dst": "product"
         }
@@ -405,6 +408,7 @@ if __name__ == "__main__":
     metadata["data_dir"] = args.data_dir
     metadata["fs_type"] = args.file_system
     metadata["num_tg_nodes"] = args.tg_nodes
+
     if "LOCAL_RANK" in os.environ:
         dist.init_process_group("nccl", timeout=timedelta(seconds=7200))
         world_size = dist.get_world_size()

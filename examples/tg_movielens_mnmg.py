@@ -1,4 +1,5 @@
 import os
+import subprocess
 import warnings
 from argparse import ArgumentParser
 from datetime import timedelta
@@ -72,10 +73,11 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 # load_tg_data will returned Data or HeteroData object of PyG
 # using Data or HeteroData object you can create GraphStore and FeatureStore
 def load_partitions(metadata, wg_mem_type):
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+    from cugraph_pyg.data import GraphStore, FeatureStore
     
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
+    undirected = metadata.get("edges").get("rates").get("undirected", False)
     data = load_tg_data(metadata, renumber=True)
     print(f"Exported tg data loaded successfully.")
     print(f"TG data: {data}")
@@ -89,20 +91,9 @@ def load_partitions(metadata, wg_mem_type):
         .clone()
     )
 
-    # adding rev rates
-    # add reverse edges if it is required for your model
-    # (no need to do if TG database has this info already, you can export it
-    # and Data/Hetero object will have that info)
-    data["movie", "rev_rates", "user"].edge_index = torch.stack(
-        [
-            data["user", "rates", "movie"].edge_index[1],
-            data["user", "rates", "movie"].edge_index[0],
-        ]
-    )
-
     # create feature store and graph store using data
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore()
 
     graph_store[
         ("user", "rates", "movie"),
@@ -111,12 +102,13 @@ def load_partitions(metadata, wg_mem_type):
         (data["user"].num_nodes, data["movie"].num_nodes),
     ] = data["user", "rates", "movie"].edge_index
 
-    graph_store[
-        ("movie", "rev_rates", "user"),
-        "coo",
-        False,
-        (data["movie"].num_nodes, data["user"].num_nodes),
-    ] = data["movie", "rev_rates", "user"].edge_index
+    if undirected:
+        graph_store[
+            ("movie", "rev_rates", "user"),
+            "coo",
+            False,
+            (data["movie"].num_nodes, data["user"].num_nodes),
+        ] = data["movie", "rev_rates", "user"].edge_index
 
     feature_store["user", "x", None] = data["user"].x
     feature_store["movie", "x", None] = data["movie"].x
@@ -272,12 +264,15 @@ metadata = {
     }, 
     "edges": {
         "rates": {
+            "undirected": True,
             "src": "user",
             "dst": "movie",
             "split": "split"
         }
     },
     "data_dir": "/data/movielens",
+    "fs_type": "shared",
+    "num_tg_nodes": 1
 }
 
 if __name__ == "__main__":
@@ -303,8 +298,18 @@ if __name__ == "__main__":
         help="The password for that user.")
     parser.add_argument("--skip_tg_export", "-s", type=bool, default=False,
         help="Wheather to skip the data export from TG. Default value (False) will fetch the data.")
+    parser.add_argument("--data_dir", type=str, default="/tmp/tg",
+        help="The directory to store the data exported from TG.")
+    parser.add_argument("--file_system", type=str, default="shared",
+        help="The type of file system to use. Options are 'local' or 'shared'.")
+    parser.add_argument("--tg_nodes", type=int, default=1,
+        help="The number of TigerGraph nodes in your cluster. Default value is 1.")
 
     args = parser.parse_args()
+    metadata["data_dir"] = args.data_dir
+    metadata["fs_type"] = args.file_system
+    metadata["num_tg_nodes"] = args.tg_nodes
+    subprocess.run(['sudo', 'chmod', '-R', '0777', args.data_dir])
 
     torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
     world_size = torch.distributed.get_world_size()

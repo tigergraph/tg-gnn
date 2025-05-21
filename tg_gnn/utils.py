@@ -59,7 +59,7 @@ def get_local_rank() -> int:
     return local_rank
 
 @timeit
-def redistribute_splits(splits: dict) -> dict:
+def redistribute_splits(splits: dict, mem_loc: str = "cpu") -> dict:
     """
     Gathers and redistributes data for train, val, and test splits across ranks.
     This support redistributions of node indices of shape [n] and edge indices of shape [2,n]
@@ -106,7 +106,7 @@ def redistribute_splits(splits: dict) -> dict:
         dist.all_gather(all_indices_list, local_indices.to(device))
         
         # Combine and split indices
-        combined = torch.cat(all_indices_list, dim=gather_dim).cpu()
+        combined = torch.cat(all_indices_list, dim=gather_dim).to(mem_loc)
         splits_shuffled[key] = torch.tensor_split(combined, world_size, dim=split_dim)[local_rank]
 
         # Cleanup resources
@@ -114,13 +114,14 @@ def redistribute_splits(splits: dict) -> dict:
         torch.cuda.empty_cache()
         logger.info(f"Completed {log_type} {key} redistribution")
 
-    logger.info("All splits redistributed successfully")
+    logger.info(f"All splits redistributed successfully on {mem_loc}")
     return splits_shuffled
 
 @timeit
 def renumber_data(
     data: Data | HeteroData,
-    metadata: dict
+    metadata: dict,
+    mem_loc: str = "cpu"
 ) -> Data | HeteroData:
     """
     Renumbers node indices (and subsequently edge indices) across multiple ranks
@@ -178,7 +179,7 @@ def renumber_data(
             for i in range(node_offsets.numel())
         ]
 
-        node_offsets_cum = node_offsets.cumsum(0).cpu()
+        node_offsets_cum = node_offsets.cumsum(0).to(mem_loc)
         this_rank = dist.get_rank() 
         local_offset = 0 if this_rank == 0 else int(node_offsets_cum[this_rank - 1])
 
@@ -197,7 +198,7 @@ def renumber_data(
 
         # Gather local map from all ranks 
         dist.all_gather(map_tensor, local_renumber_map)
-        map_tensor = torch.cat(map_tensor, dim=1).cpu()
+        map_tensor = torch.cat(map_tensor, dim=1).to(mem_loc)
 
         global_renumber_map[vertex_name] = cudf.DataFrame(
             data={"id": cupy.asarray(map_tensor[0])},
@@ -206,12 +207,12 @@ def renumber_data(
 
         # update the node ids
         if is_hetero:
-            data[vertex_name].node_ids = local_renumber_map[0].cpu()
+            data[vertex_name].node_ids = local_renumber_map[0].to(mem_loc)
         else:
-            data.node_ids = local_renumber_map[0].cpu()
+            data.node_ids = local_renumber_map[0].to(mem_loc)
 
         del map_tensor, node_offsets, node_offsets_cum, current_num_nodes, local_renumber_map
-        logger.info(f"Renumbering the {vertex_name} ids completed successfully.")
+        logger.info(f"Renumbering the {vertex_name} ids completed successfully on {mem_loc}.")
  
     # Process/Renumber edges
     for rel_name, edge_meta in metadata["edges"].items():
@@ -231,8 +232,8 @@ def renumber_data(
             continue
 
         # Convert to CuPy for indexing
-        srcs = cupy.asarray(edge_index[0].cpu())
-        dsts = cupy.asarray(edge_index[1].cpu())
+        srcs = cupy.asarray(edge_index[0].to(mem_loc))
+        dsts = cupy.asarray(edge_index[1].to(mem_loc))
 
         # Retrieve the renumber maps for src and dst
         #   - map is a cudf DF: old_id => new_id
@@ -265,12 +266,12 @@ def renumber_data(
 
         # Store in data
         if is_hetero:
-            data[rel].edge_index = new_edge_index
+            data[rel].edge_index = new_edge_index.to(mem_loc)
         else:
-            data.edge_index = new_edge_index
+            data.edge_index = new_edge_index.to(mem_loc)
 
         del src_map, dst_map, srcs, dsts
-        logger.info(f"Renumbering of {rel_name} indices completed successfully.")
+        logger.info(f"Renumbering of {rel_name} indices completed successfully on {mem_loc}.")
 
     del global_renumber_map
     torch.cuda.empty_cache()
@@ -365,3 +366,63 @@ def get_num_partitions(fs_type: str = "local", num_tg_nodes: int | None = None) 
                 # one file and few will have more than 1.
                 num_partitions = (num_partitions // num_tg_nodes) + 1
     return num_partitions
+
+def find_misaligned_tensors(data: HeteroData, expected_device: str | torch.device):
+    misaligned = []
+
+    if isinstance(expected_device, str):
+        expected_device = torch.device(expected_device)
+    for node_type in data.node_types:
+        for key, tensor in data[node_type].items():
+            if isinstance(tensor, torch.Tensor) and tensor.device != expected_device:
+                misaligned.append((f"Node[{node_type}][{key}]", tensor.device))
+
+    for edge_type in data.edge_types:
+        for key, tensor in data[edge_type].items():
+            if isinstance(tensor, torch.Tensor) and tensor.device != expected_device:
+                misaligned.append((f"Edge[{edge_type}][{key}]", tensor.device))
+
+    if misaligned:
+        print("Tensors not on expected device:")
+        for name, device in misaligned:
+            print(f"{name} is on {device}")
+    else:
+        print("All tensors are on the correct device.")
+    return misaligned
+
+def check_heterodata_integrity(data: HeteroData):
+    issues = []
+
+    for node_type in data.node_types:
+        x = data[node_type].get('x', None)
+        if x is not None and not isinstance(x, torch.Tensor):
+            issues.append(f"[{node_type}] 'x' is not a Tensor.")
+    
+    for edge_type in data.edge_types:
+        if 'edge_index' not in data[edge_type]:
+            issues.append(f"[{edge_type}] Missing 'edge_index'.")
+            continue
+        
+        edge_index = data[edge_type]['edge_index']
+        if edge_index.dim() != 2 or edge_index.size(0) != 2:
+            issues.append(f"[{edge_type}] 'edge_index' must be of shape [2, num_edges].")
+
+        src_type, _, dst_type = edge_type
+        num_src_nodes = data[src_type].get('x', torch.empty(0)).size(0)
+        num_dst_nodes = data[dst_type].get('x', torch.empty(0)).size(0)
+
+        if edge_index.size(1) > 0:
+            src_max = edge_index[0].max().item()
+            dst_max = edge_index[1].max().item()
+
+            if src_max >= num_src_nodes:
+                issues.append(f"[{edge_type}] 'edge_index[0]' has index {src_max} >= num {src_type} nodes ({num_src_nodes})")
+            if dst_max >= num_dst_nodes:
+                issues.append(f"[{edge_type}] 'edge_index[1]' has index {dst_max} >= num {dst_type} nodes ({num_dst_nodes})")
+    
+    if not issues:
+        print("HeteroData integrity check passed.")
+    else:
+        print("HeteroData integrity issues found:")
+        for i, issue in enumerate(issues, 1):
+            print(f"{i}. {issue}")

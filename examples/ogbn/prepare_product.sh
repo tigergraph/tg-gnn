@@ -1,5 +1,9 @@
 #!/bin/bash
 
+mkdir -p /tmp/ogbn
+sudo chmod 777 /tmp/ogbn
+cd /tmp/ogbn
+
 if [[ ! -f products.zip ]]; then
    curl -OL http://snap.stanford.edu/ogb/data/nodeproppred/products.zip
 fi

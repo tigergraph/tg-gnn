@@ -8,9 +8,8 @@ if [[ ! -d ml-latest-small ]]; then
 fi
 if [[ ! -f ml-latest-small/embedding.csv ]]; then
    echo "Generating ml-latest-small/embedding.csv"
-   python3 -m pip install pandas
-   python3 -m pip install langchain_openai
-   python3 ./add_embedding.py
+   python3 -m pip install pandas langchain_openai langchain_community sentence_transformers
+   python3 ./gen_embedding.py
 fi
 if [[ ! -f ml-latest-small/ratings-with-split.csv ]]; then
    echo "Generating ml-latest-small/ratings-with-split.csv"
