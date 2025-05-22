@@ -6,8 +6,7 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
 
 ## Getting Started
 ### Cuda setup
-- Required Cuda version >= 11.8; 
-- Note: support for 11.8 will be drop very soon. so, use cuda >= 12.0
+- Required Cuda version >= 12.8;
 
 ### Environment Setup
 
@@ -23,8 +22,12 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
     ```bash
     git clone https://github.com/tigergraph/tg-gnn.git
     cd tg-gnn
-    pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
+    bash setup/python_setup.sh
     ```
+4. **Install CUDA Toolkit (Optional)**
+   ```bash
+   bash setup/cuda_setup.sh
+   ```
 ---
 
 ## Changes Required to Run example GCN Model code on Any TigerGraph Graph
@@ -71,6 +74,7 @@ metadata = {
     "edges": {
         "<rel_name>": {
             "rel_name": "<rel_name">,
+            "undirected": True,
             "src": "<src_name>", 
             "dst": "<dst_name>",
             "features_list" (optional): {
@@ -85,11 +89,15 @@ metadata = {
 }
 ```
 
-- **`vertex_name`**: The name of the node/vertex in TigerGraph (e.g., `paper`).  
+- **`vertex_name`**: The name of the node/vertex in TigerGraph (e.g., `paper`).
 - **`features_list`**: Specifies which node attributes are used as input features. feature_datatype could be either "INT", "FLOAT" or "LIST" (list should only contain FLOAT/INT values for GNN training) 
 - **`label`**: Points to the attribute name that holds the label for training/validation/testing.  
 - **`split`**: Identifies the attribute that indicates whether a node belongs to the training, validation, or test set.  
 - **`num_nodes`**: Indicates the number of vertices/nodes for given vertex/node type.  
+- **`rel_name`**: The name of the edge in TigerGraph (e.g., `uses`).
+- **`undirected`**: The direction of the edge in TigerGraph. Reverse edge (e.g., `rev_uses`) will be generated when it's True.
+- **`src`**: The `from` vertex type of the edge in TigerGraph.
+- **`dst`**: The `to` vertex type of the edge in TigerGraph.
 - **`data_dir`**: The temporary directory where TigerGraph will export the data and data would be assesed by GNN model training process.
 
 ---
@@ -100,14 +108,16 @@ Use the following command to run the GCN example. Make sure to replace the place
 
 ```bash
 torchrun --nnodes 1 --nproc-per-node 4 --rdzv-id 4RANDOM --rdzv-backend c10d --rdzv-endpoint localhost:29500 examples/tg_ogbn_products_mnmg.py \
-    -g <tg-graph-name> --host <tg-host-ip> -u <tg-username> -p <tg-password> --restppPort <tg-port>
+    -g <tg-graph-name> --host <tg-host-ip> --restppPort <tg-port> -u <tg-username> -p <tg-password> --tg_nodes 1 --data_dir /tg_export
 ```
 
 - `--nnodes` **and** `--nproc-per-node`: Control the number of nodes and GPUs per node for multi-GPU training.  
 - `--rdzv-id`, `--rdzv-backend`, `--rdzv-endpoint`: Arguments for PyTorch’s distributed runtime.  
 - `-g` (`--graph`): Name of the TigerGraph graph to be used.  
-- `--host`, `--restppPort`, `-u`, `-p`: Host IP, port for rest++ queries, username, and password for connecting to your TigerGraph instance.
-- `--skip_tg_export`, `-s`: Control data exporting from TigerGraph, omit the argument to perform data exporting step
+- `--host`, `--restppPort`, `-u`, `-p`: Host IP, port for rest++ queries, username, and password for connecting to your TigerGraph instance for data export.
+- `--tg_nodes`: The number of nodes in TigerGraph cluster
+- `--data_dir`: The location of the data files stored
+- `--skip_tg_export`, `-s`: Control data exporting from TigerGraph, omit the argument to perform data exporting step when provided
 
 
 ## Expected Result from running above example
