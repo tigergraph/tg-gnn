@@ -71,9 +71,9 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 #### TG changes 2: load partitions ####
 # use load_tg_data to read the TG exported data
 # load_tg_data will returned Data or HeteroData object of PyG
-# using Data or HeteroData object you can create GraphStore and FeatureStore
+# using Data or HeteroData object you can create GraphStore and WholeFeatureStore
 def load_partitions(metadata, wg_mem_type):
-    from cugraph_pyg.data import GraphStore, FeatureStore
+    from cugraph_pyg.data import GraphStore, WholeFeatureStore
     
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
@@ -93,7 +93,7 @@ def load_partitions(metadata, wg_mem_type):
 
     # create feature store and graph store using data
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = FeatureStore()
+    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
 
     graph_store[
         ("user", "rates", "movie"),
