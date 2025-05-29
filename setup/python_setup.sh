@@ -20,7 +20,9 @@ pip install \
     "cucim-cu12>=25.6.0a0,<=25.6" "pylibraft-cu12>=25.6.0a0,<=25.6" \
     "raft-dask-cu12>=25.6.0a0,<=25.6" "cuvs-cu12>=25.6.0a0,<=25.6" \
     "pylibraft-cu12>=25.6.0a0,<=25.6" "nx-cugraph-cu12>=25.6.0a0,<=25.6" \
-    "dask-cuda>=25.6.0a0,<=25.6"
+    "dask-cuda>=25.6.0a0,<=25.6" "cugraph-cu12>=25.6.0a0,<=25.6" \
+    "pylibwholegraph-cu12>=25.6.0a0,<=25.6" "cugraph-pyg-cu12>=25.6.0a0,<=25.6" \
+    "cudf-cu12>=25.6.0a0,<=25.6"
 
 git clone https://github.com/rapidsai/cugraph-gnn.git
 cd cugraph-gnn/python/cugraph-pyg/

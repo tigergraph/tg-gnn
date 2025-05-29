@@ -163,10 +163,10 @@ class Model(torch.nn.Module):
 
 
 def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
-    from cugraph_pyg.data import GraphStore, FeatureStore
+    from cugraph_pyg.data import GraphStore, WholeFeatureStore
 
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = FeatureStore()
+    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
     print(f"data user size: {data['user'].num_nodes}.")
     print(f"data item size: {data['item'].num_nodes}.")
 
@@ -210,7 +210,7 @@ def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
 #### TG changes 2: load partitions ####
 # use load_tg_data to read the TG exported data
 # load_tg_data will returned Data or HeteroData object of PyG
-# using Data or HeteroData object you can create GraphStore and FeatureStore
+# using Data or HeteroData object you can create GraphStore and WholeFeatureStore
 def load_partitions(metadata, wg_mem_type):
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()

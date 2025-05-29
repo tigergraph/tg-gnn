@@ -71,10 +71,10 @@ def write_edges(edge_index, path):
 
 
 def cugraph_pyg_from_heterodata(data, wg_mem_type):
-    from cugraph_pyg.data import GraphStore, FeatureStore
+    from cugraph_pyg.data import GraphStore, WholeFeatureStore
 
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = FeatureStore()
+    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
 
     graph_store[
         ("user", "rates", "movie"),
