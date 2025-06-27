@@ -390,6 +390,7 @@ if __name__ == "__main__":
             **kwargs,
         )
 
+        model = Model(hidden_channels=64).to(device)
         model = to_hetero(model, graph_store.metadata(), aggr='sum').to(device)
 
     else:
