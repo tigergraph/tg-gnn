@@ -390,8 +390,7 @@ if __name__ == "__main__":
             **kwargs,
         )
 
-        model = Model(hidden_channels=64).to(device)
-        model = to_hetero(model, graph_store.metadata(), aggr='sum').to(device)
+        #model = to_hetero(model, graph_store.metadata(), aggr='sum').to(device)
 
     else:
         from cugraph_pyg.loader import LinkNeighborLoader
@@ -419,7 +418,7 @@ if __name__ == "__main__":
             sparse_size=sparse_size,
         ).sort_by("row")[0]
 
-        model = Model(hidden_channels=64).to(device)
+    model = Model(hidden_channels=64).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
