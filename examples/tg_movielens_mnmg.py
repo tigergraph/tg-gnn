@@ -378,14 +378,14 @@ if __name__ == "__main__":
     )
 
     if args.train_mode == "node":
-        from cugraph_pyg.loader import HGTLoader
+        from cugraph_pyg.loader import NeighborLoader
 
-        train_loader = HGTLoader(
+        train_loader = NeighborLoader(
             input_nodes=eli_train,
             **kwargs,
         )
-        
-        test_loader = HGTLoader(
+
+        test_loader = NeighborLoader(
             input_nodes=eli_test,
             **kwargs,
         )
