@@ -17,7 +17,7 @@ from tqdm import tqdm
 from torch_geometric import EdgeIndex
 from torch_geometric.datasets import MovieLens
 
-from torch_geometric.nn import SAGEConv
+from torch_geometric.nn import SAGEConv, to_hetero
 from torch_geometric.data import HeteroData
 
 from pylibwholegraph.torch.initialize import (
@@ -304,6 +304,8 @@ if __name__ == "__main__":
         help="The type of file system to use. Options are 'local' or 'shared'.")
     parser.add_argument("--tg_nodes", type=int, default=1,
         help="The number of TigerGraph nodes in your cluster. Default value is 1.")
+    parser.add_argument("--train_mode", type=str, default="link",
+        help="The training mode to use, supports node or link.")
 
     args = parser.parse_args()
     metadata["data_dir"] = args.data_dir
@@ -375,32 +377,48 @@ if __name__ == "__main__":
         # temporal_strategy='last',
     )
 
-    from cugraph_pyg.loader import LinkNeighborLoader
+    if args.train_mode == "node":
+        from cugraph_pyg.loader import HGTLoader
 
-    train_loader = LinkNeighborLoader(
-        edge_label_index=(("user", "rates", "movie"), eli_train),
-        # edge_label_time=time[train_index] - 1,  # No leakage.
-        neg_sampling=dict(mode="binary", amount=2),
-        **kwargs,
-    )
+        train_loader = HGTLoader(
+            input_nodes=eli_train,
+            **kwargs,
+        )
+        
+        test_loader = HGTLoader(
+            input_nodes=eli_test,
+            **kwargs,
+        )
 
-    test_loader = LinkNeighborLoader(
-        edge_label_index=(("user", "rates", "movie"), eli_test),
-        neg_sampling=dict(mode="binary", amount=1),
-        **kwargs,
-    )
+        model = to_hetero(model, graph_store.metadata(), aggr='sum').to(device)
 
-    sparse_size = (metadata["nodes"]["user"]["num_nodes"], metadata["nodes"]["movie"]["num_nodes"])
-    test_edge_label_index = EdgeIndex(
-        eli_test.to(device),
-        sparse_size=sparse_size,
-    ).sort_by("row")[0]
-    test_exclude_links = EdgeIndex(
-        eli_test.to(device),
-        sparse_size=sparse_size,
-    ).sort_by("row")[0]
+    else:
+        from cugraph_pyg.loader import LinkNeighborLoader
 
-    model = Model(hidden_channels=64).to(device)
+        train_loader = LinkNeighborLoader(
+            edge_label_index=(("user", "rates", "movie"), eli_train),
+            # edge_label_time=time[train_index] - 1,  # No leakage.
+            neg_sampling=dict(mode="binary", amount=2),
+            **kwargs,
+        )
+
+        test_loader = LinkNeighborLoader(
+            edge_label_index=(("user", "rates", "movie"), eli_test),
+            neg_sampling=dict(mode="binary", amount=1),
+            **kwargs,
+        )
+
+        sparse_size = (metadata["nodes"]["user"]["num_nodes"], metadata["nodes"]["movie"]["num_nodes"])
+        test_edge_label_index = EdgeIndex(
+            eli_test.to(device),
+            sparse_size=sparse_size,
+        ).sort_by("row")[0]
+        test_exclude_links = EdgeIndex(
+            eli_test.to(device),
+            sparse_size=sparse_size,
+        ).sort_by("row")[0]
+
+        model = Model(hidden_channels=64).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
