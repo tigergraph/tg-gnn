@@ -1,0 +1,5 @@
+CREATE VERTEX paper(id UINT primary key, name STRING, embedding LIST<DOUBLE>, node_label INT, train_val_test INT) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE VERTEX author(id UINT primary key, name STRING) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE DIRECTED EDGE paper_cites_paper(FROM paper, TO paper)
+CREATE DIRECTED EDGE author_writes_paper(FROM author, TO paper)
+CREATE GRAPH ogbn_mag(paper, author, paper_cites_paper, author_writes_paper)

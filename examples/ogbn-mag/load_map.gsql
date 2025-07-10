@@ -1,0 +1,25 @@
+use graph ogbn_mag
+
+create loading job load_mag {
+   DEFINE FILENAME f1="mag/mapping/paper_entidx2name.csv";
+   DEFINE FILENAME f2="mag/raw/node-feat/paper/node-feat-with-id.csv";
+   DEFINE FILENAME f3="mag/raw/node-label/paper/node-label-with-id.csv";
+   DEFINE FILENAME f4="mag/raw/relations/paper___cites___paper/edge.csv";
+   DEFINE FILENAME f5="mag/mapping/author_entidx2name.csv";
+   DEFINE FILENAME f6="mag/raw/relations/author___writes___paper/edge.csv";
+   DEFINE FILENAME f7="mag/split/time/paper/train-with-split.csv";
+   DEFINE FILENAME f8="mag/split/time/paper/valid-with-split.csv";
+   DEFINE FILENAME f9="mag/split/time/paper/test-with-split.csv";
+
+   LOAD f1 TO VERTEX paper VALUES($0, $1, _, _, _, _) USING SEPARATOR=",", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f2 TO VERTEX paper VALUES($0, _, SPLIT($1, ","), _, _) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f3 TO VERTEX paper VALUES($0, _, _, $1, _) USING SEPARATOR=",", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f4 TO EDGE paper_cites_paper VALUES($0, $1) USING SEPARATOR=",", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f5 TO VERTEX author VALUES($0, $1) USING SEPARATOR=",", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f6 TO EDGE author_writes_paper VALUES($0, $1) USING SEPARATOR=",", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+
+   LOAD f7 TO VERTEX paper VALUES($0, _, _, _, $1) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f8 TO VERTEX paper VALUES($0, _, _, _, $1) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+   LOAD f9 TO VERTEX paper VALUES($0, _, _, _, $1) USING SEPARATOR="|", HEADER="false", EOL="\n", QUOTE="DOUBLE";
+}
+run loading job load_mag
