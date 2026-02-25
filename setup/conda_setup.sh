@@ -17,4 +17,4 @@ else
   conda config --env --set channel_priority strict
 fi
 
-conda install -y python-abi3=3.12 cucim=25.04 cudf=25.04 cuml=25.04 cuproj=25.04 cuspatial=25.04 cuvs=25.04 cuxfilter=25.04 dask-cuda=25.04 dask-cudf=25.04 nx-cugraph=25.04 pylibraft=25.04 raft-dask=25.04 cugraph=25.04 cugraph-pyg=25.04 cudf=25.04 pylibwholegraph=25.04
+conda install -y python-abi3=3.12 cucim=26.02 cudf=26.02 cuml=26.02 cuproj=26.02 cuspatial=26.02 cuvs=26.02 cuxfilter=26.02 dask-cuda=26.02 dask-cudf=26.02 nx-cugraph=26.02 pylibraft=26.02 raft-dask=26.02 cugraph=26.02 cugraph-pyg=26.02 cudf=26.02 pylibwholegraph=26.02
