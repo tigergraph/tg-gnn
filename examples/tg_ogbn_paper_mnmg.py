@@ -294,15 +294,15 @@ def parse_args():
 #### TG changes 2: load partitions ####
 # use load_tg_data to read the TG exported data
 # load_tg_data will returned Data or HeteroData object of PyG
-# using Data or HeteroData object you can create GraphStore and WholeFeatureStore
+# using Data or HeteroData object you can create GraphStore and FeatureStore
 def load_partitions(
     metadata: dict, 
     wg_mem_type: str, 
 ): 
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+    from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore(memory_type=wg_mem_type)
 
     # Load TG data and renumber the node ids
     # renumbering is required so keep it True

@@ -95,7 +95,7 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 # Edges are sorted by timestamp and split 80/20 for train/test.
 # Time attributes are stored in the feature store for temporal neighbor sampling.
 def load_partitions(metadata, wg_mem_type):
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+    from cugraph_pyg.data import GraphStore, FeatureStore
 
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
@@ -138,7 +138,7 @@ def load_partitions(metadata, wg_mem_type):
 
     # --- Build cuGraph stores -----------------------------------------------
     graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore(memory_type=wg_mem_type)
 
     graph_store[
         ("user", "rates", "movie"),

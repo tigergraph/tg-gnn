@@ -19,4 +19,10 @@ else
   conda config --env --set channel_priority strict
 fi
 
-conda install -y python-abi3=3.12 cugraph=26.02 cugraph-pyg=26.02 cudf=26.02 dask-cuda=26.02 pylibwholegraph=26.02 raft-dask=26.02 cuda-cudart cuda-version=12
+conda install -y python-abi3=3.12 cugraph=26.02 cugraph-pyg=26.02 cudf=26.02 dask-cuda=26.02 pylibwholegraph=26.02 raft-dask=26.02 "libstdcxx-ng>=12"
+conda install -y torch torchvision torchaudio torch_geometric pytest tensordict scikit-learn
+pip install pytigergraph
+
+# Ensure conda's libstdc++ is used instead of the older system one
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+echo 'export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH' > $CONDA_PREFIX/etc/conda/activate.d/libstdcxx_path.sh
