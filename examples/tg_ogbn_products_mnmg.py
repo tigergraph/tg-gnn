@@ -315,7 +315,7 @@ def load_partitions(
     logger.info("Initializing GraphStore and FeatureStore...") 
     from cugraph_pyg.data import GraphStore, FeatureStore
 
-    graph_store = GraphStore(is_multi_gpu=True)
+    graph_store = GraphStore()
     feature_store = FeatureStore(memory_type=wg_mem_type)
     logger.info("Initializing GraphStore and FeatureStore completed.")
     logger.info(f"Initializing GraphStore and FeatureStore took {time.perf_counter() - store_start} seconds.")  

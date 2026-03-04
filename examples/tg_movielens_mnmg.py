@@ -137,7 +137,7 @@ def load_partitions(metadata, wg_mem_type):
     time_splits = redistribute_splits(time_splits)
 
     # --- Build cuGraph stores -----------------------------------------------
-    graph_store = GraphStore(is_multi_gpu=True)
+    graph_store = GraphStore()
     feature_store = FeatureStore(memory_type=wg_mem_type)
 
     graph_store[
