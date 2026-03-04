@@ -4,8 +4,8 @@
 #source ~/miniforge3/bin/activate
 #conda init
 #exit and relogin
-#conda create --name conda-forge-gnn python=3.12 --channel conda-forge --override-channels -y
-#conda activate conda-forge-gnn
+#conda create --name tg-gnn python=3.12 --channel conda-forge --override-channels -y
+#conda activate tg-gnn
 
 if conda info | grep "active environment" | grep "base" >/dev/null; then
   conda config --add channels conda-forge
@@ -20,7 +20,9 @@ else
 fi
 
 conda install -y python-abi3=3.12 cugraph=26.02 cugraph-pyg=26.02 cudf=26.02 dask-cuda=26.02 pylibwholegraph=26.02 raft-dask=26.02 "libstdcxx-ng>=12"
-conda install -y torch torchvision torchaudio torch_geometric pytest tensordict scikit-learn
+conda install -y -c pytorch -c nvidia torch torchvision torchaudio pytorch-cuda=12.4
+conda install -y -c pyg torch_geometric
+conda install -y pytest tensordict scikit-learn
 pip install pytigergraph
 
 # Ensure conda's libstdc++ is used instead of the older system one
