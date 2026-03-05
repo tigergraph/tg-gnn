@@ -20,10 +20,9 @@ else
 fi
 
 conda install -y python-abi3=3.12 cugraph=26.02 cugraph-pyg=26.02 cudf=26.02 dask-cuda=26.02 pylibwholegraph=26.02 raft-dask=26.02 "libstdcxx-ng>=12"
-conda install -y -c pytorch -c nvidia torch torchvision torchaudio pytorch-cuda=12.4
-conda install -y -c pyg torch_geometric
-conda install -y pytest tensordict scikit-learn
-pip install pytigergraph
+conda install -y pytest scikit-learn
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install torch_geometric tensordict pytigergraph
 
 # Ensure conda's libstdc++ is used instead of the older system one
 mkdir -p $CONDA_PREFIX/etc/conda/activate.d

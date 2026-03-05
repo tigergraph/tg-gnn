@@ -9,7 +9,8 @@ source venv/bin/activate
 export PATH="/usr/local/cuda/bin:$PATH"
 export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
-pip install torch torchvision torchaudio torch_geometric pytigergraph pytest tensordict scikit-learn
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install torch_geometric tensordict pytigergraph pytest scikit-learn
 
 pip install \
     --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
