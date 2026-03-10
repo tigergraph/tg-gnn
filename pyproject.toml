@@ -27,10 +27,10 @@ classifiers = [
 dependencies = [
     "pyTigerGraph",
     "numba>=0.57",
-    "numpy>=1.23,<3.0a0",
+    "numpy>=1.23,<2.3",
     "pandas",
     "tensordict>=0.1.2",
-    "torch-geometric>=2.5,<2.7",
+    "torch-geometric>=2.7",
     "torch>=2.3",
     "scikit-learn",
     "pytest",
