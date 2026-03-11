@@ -427,10 +427,12 @@ if __name__ == "__main__":
         **kwargs,
     )
 
-    # Test loader uses non-temporal sampling (no time_attr/edge_label_time),
-    # matching the upstream RAPIDS reference example.
+    # Test loader uses temporal sampling for consistent evaluation:
+    # negatives and neighbors are restricted to edges before each seed's timestamp.
     test_loader = LinkNeighborLoader(
         edge_label_index=(("user", "rates", "movie"), eli_test),
+        edge_label_time=time_splits["test"] - 1,
+        time_attr="time",
         neg_sampling=dict(mode="binary", amount=1),
         **kwargs,
     )
