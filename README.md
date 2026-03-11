@@ -10,27 +10,24 @@ This project is intended for using [TigerGraph](https://www.tigergraph.com/) as 
 
 ### Environment Setup
 
-1. **Download and install Conda, for example Miniforge**
+1. **Install CUDA Toolkit (Optional)**
    ```bash
+   bash setup/cuda_setup.sh
+   ```
+2. **Download and install Conda, for example Miniforge**
+   ```bash
+   curl -OL  https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
    bash ./Miniforge3-Linux-x86_64.sh -b -u -p ~/miniforge3
    source ~/miniforge3/bin/activate
    conda init
-   ```
-2. **Create a new conda environment (optional, recommended):**
-   ```bash
-   conda create --name conda-forge-gnn python=3.12 --channel conda-forge --override-channels -y
-   conda activate conda-forge-gnn
    ```
 3. **Install tg-gnn project**
     ```bash
     git clone https://github.com/tigergraph/tg-gnn.git
     cd tg-gnn
-    bash setup/conda_setup.sh
+    source setup/conda_setup.sh
+    pip install .
     ```
-4. **Install CUDA Toolkit (Optional)**
-   ```bash
-   bash setup/cuda_setup.sh
-   ```
 ---
 
 ## Changes Required to Run example GCN Model code on Any TigerGraph Graph
