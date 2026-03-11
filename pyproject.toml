@@ -39,6 +39,7 @@ dependencies = [
     "torchmetrics",
     "polars",
     "psutil",
+    "pytest>=6.2.0",
     # examples
     "langchain-community",
     "langchain-text-splitters",
@@ -52,7 +53,6 @@ dependencies = [
 [project.optional-dependencies]
 # Development / testing tools.
 test = [
-    "pytest>=6.2.0",
     "pytest-mock",
 ]
 

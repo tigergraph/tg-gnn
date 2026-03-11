@@ -13,7 +13,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ENV_NAME="tg-gnn"
 CONDA_PKGS=(
-    "rapids=26.02"
+    # cudf pulls in cupy, rmm, pylibcudf transitively.
+    # cugraph pulls in pylibcugraph transitively.
+    "cudf=26.02"
+    "cugraph=26.02"
     "pylibwholegraph=26.02"
     "cugraph-pyg=26.02"
     "python=3.12"

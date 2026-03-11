@@ -22,13 +22,14 @@ pip install "cuda-python>=13.0.1,<14.0"
 # torch_geometric>=2.5 for PyTorch 2.5+ compatibility
 pip install "torch_geometric>=2.5" pytigergraph scikit-learn tqdm
 
-# RAPIDS 26.2 stack from NVIDIA's PyPI index
+# Only the RAPIDS packages actually used by tg-gnn.
+# cudf pulls in cupy, rmm, pylibcudf transitively.
+# cugraph pulls in pylibcugraph transitively.
 pip install \
     --extra-index-url=https://pypi.nvidia.com \
-    "cudf-cu12==26.2.*" "dask-cudf-cu12==26.2.*" "cuml-cu12==26.2.*" \
-    "cugraph-cu12==26.2.*" "nx-cugraph-cu12==26.2.*" "cuxfilter-cu12==26.2.*" \
-    "cucim-cu12==26.2.*" "pylibraft-cu12==26.2.*" "raft-dask-cu12==26.2.*" \
-    "cuvs-cu12==26.2.*" "pylibwholegraph-cu12==26.2.*" \
+    "cudf-cu12==26.2.*" \
+    "cugraph-cu12==26.2.*" \
+    "pylibwholegraph-cu12==26.2.*" \
     "cugraph-pyg==26.2.*"
 
 #git clone https://github.com/tigergraph/tg-gnn.git
