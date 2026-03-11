@@ -22,7 +22,7 @@ pip uninstall nvidia-cuda-runtime-cu12 -y || true
 pip install "cupy-cuda12x>=13.6.0" "cuda-python>=13.0.1,<14.0" "numpy>=1.23,<2.3"
 
 # torch_geometric>=2.7 fixes the DiagnosticOptions ImportError with PyTorch 2.6+
-pip install "torch_geometric>=2.7,<2.8" tensordict pytigergraph pytest scikit-learn
+pip install "torch_geometric>=2.7,<2.8" tensordict pytigergraph pytest scikit-learn tqdm
 
 pip install \
     --extra-index-url=https://pypi.nvidia.com \

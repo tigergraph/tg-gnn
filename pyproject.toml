@@ -23,26 +23,51 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 
-# If you have direct dependencies, list them here:
+# Core runtime dependencies (pip-installable).
+# Install the conda environment first via setup/conda_setup.sh, which provides
+# the RAPIDS stack (cudf, cupy, rmm, cugraph, etc.) that cannot be pip-installed.
 dependencies = [
     "pyTigerGraph",
-    "numba>=0.57",
     "numpy>=1.23,<2.3",
     "pandas",
-    "tensordict>=0.1.2",
-    "torch-geometric>=2.7",
-    "torch>=2.3",
+    "torch>=2.5",
+    "torch-geometric>=2.5",
     "scikit-learn",
-    "pytest",
-    "ogb"
-
+    "ogb",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
+# RAPIDS GPU stack — installed via conda (setup/conda_setup.sh), listed here for
+# documentation purposes. Do not pip-install these directly.
+rapids = [
+    "cudf-cu12",
+    "cupy-cuda12x",
+    "rmm-cu12",
+    "cugraph-cu12",
+    "cugraph-pyg",
+    "pylibwholegraph",
+]
+
+# Extra packages used only in benchmark/ scripts.
+benchmark = [
+    "torchmetrics",
+    "polars",
+    "psutil",
+]
+
+# Extra packages used only in examples/movielens/ embedding scripts.
+examples = [
+    "langchain-community",
+    "langchain-text-splitters",
+    "langchain-openai",
+    "sentence-transformers",
+]
+
+# Development / testing tools.
 test = [
-    "ogb",
     "pytest>=6.2.0",
-    "scikit-learn"
+    "pytest-mock",
 ]
 
 [tool.setuptools.packages.find]
