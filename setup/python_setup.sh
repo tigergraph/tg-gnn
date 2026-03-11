@@ -1,6 +1,14 @@
 #!/bin/bash
+# Sets up a pip-based Python 3.12 venv with RAPIDS + PyTorch (pip alternative to conda_setup.sh).
+#
+# Usage:
+#   bash setup/python_setup.sh
+#
+# After setup, install tg-gnn itself:
+#   cd ~/tg-gnn && pip install .
 
-cd ~
+set -e
+
 sudo apt update -y
 sudo apt install -y python3.12-venv
 python3 -m venv venv
@@ -16,12 +24,6 @@ pip install "torch>=2.5" --index-url https://download.pytorch.org/whl/cu126
 # is used by both torch and RAPIDS (rmm/cugraph), avoiding the version mismatch that
 # causes cudaErrorInsufficientDriver in rmm.reinitialize().
 pip uninstall nvidia-cuda-runtime-cu12 -y || true
-# Pin cuda-python before RAPIDS install; cupy is pulled in transitively by cudf-cu12.
-pip install "cuda-python>=13.0.1,<14.0"
-
-# torch_geometric>=2.5 for PyTorch 2.5+ compatibility
-pip install "torch_geometric>=2.5" pytigergraph scikit-learn tqdm
-
 # Only the RAPIDS packages actually used by tg-gnn.
 # cudf pulls in cupy, rmm, pylibcudf transitively.
 # cugraph pulls in pylibcugraph transitively.
@@ -32,6 +34,5 @@ pip install \
     "pylibwholegraph-cu12==26.2.*" \
     "cugraph-pyg==26.2.*"
 
-#git clone https://github.com/tigergraph/tg-gnn.git
-cd tg-gnn
-pip install --extra-index-url=https://pypi.nvidia.com .
+echo ""
+echo "Setup complete. Run: cd ~/tg-gnn && pip install ."

@@ -23,9 +23,10 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 
-# Core runtime dependencies (pip-installable).
-# Install the conda environment first via setup/conda_setup.sh, which provides
-# the RAPIDS stack (cudf, cupy, rmm, cugraph, etc.) that cannot be pip-installed.
+# Core runtime dependencies (pip-installable via PyPI).
+# The RAPIDS GPU stack must be installed first via one of the setup scripts:
+#   conda: setup/conda_setup.sh
+#   pip:   setup/python_setup.sh
 dependencies = [
     "pyTigerGraph",
     "numpy>=1.23,<2.3",
@@ -39,12 +40,14 @@ dependencies = [
     "torchmetrics",
     "polars",
     "psutil",
-    "pytest>=6.2.0",
     # examples
     "langchain-community",
     "langchain-text-splitters",
     "langchain-openai",
     "sentence-transformers",
+    # A transitive dependency in the RAPIDS stack imports pytest at runtime,
+    # so it must be a core dep rather than test-only.
+    "pytest>=6.2.0",
 ]
 
 # The RAPIDS GPU stack (cudf, cupy, rmm, cugraph, pylibwholegraph, etc.) is managed
