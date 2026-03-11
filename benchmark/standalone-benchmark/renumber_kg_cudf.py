@@ -126,7 +126,7 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
-    torch.distributed.init_process_group("nccl")
+    torch.distributed.init_process_group("nccl", device_id=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"))
     world_size = torch.distributed.get_world_size()
     global_rank = torch.distributed.get_rank()
 

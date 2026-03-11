@@ -29,7 +29,7 @@ from ogb.linkproppred import PygLinkPropPredDataset
 
 import cugraph_pyg
 
-from cugraph.gnn import (
+from pylibcugraph.comms import (
     cugraph_comms_init,
     cugraph_comms_create_unique_id,
     cugraph_comms_shutdown,
@@ -301,8 +301,8 @@ def load_partitioned_data(rank, edge_path, rel_path, pos_path, neg_path, meta_pa
     from cugraph_pyg.data import GraphStore, FeatureStore, TensorDictFeatureStore
 
     graph_store = GraphStore()
-    feature_store = TensorDictFeatureStore(memory_type=wg_mem_type)
-    edge_feature_store = FeatureStore(memory_type=wg_mem_type)
+    feature_store = TensorDictFeatureStore()
+    edge_feature_store = FeatureStore()
 
     # Load edge index
     graph_store[("n", "e", "n"), "coo"] = torch.load(
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     if "LOCAL_RANK" in os.environ:
-        torch.distributed.init_process_group("nccl")
+        torch.distributed.init_process_group("nccl", device_id=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"))
         world_size = torch.distributed.get_world_size()
         global_rank = torch.distributed.get_rank()
         local_rank = int(os.environ["LOCAL_RANK"])

@@ -69,7 +69,7 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 
     torch.cuda.set_device(local_rank)
 
-    from cugraph.gnn import cugraph_comms_init
+    from pylibcugraph.comms import cugraph_comms_init
 
     cugraph_comms_init(
         rank=global_rank, world_size=world_size, uid=cugraph_id, device=local_rank
@@ -212,7 +212,7 @@ def cugraph_pyg_from_heterodata(data, wg_mem_type, return_edge_label=True):
     from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore()
-    feature_store = FeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore()
 
     graph_store[
         ("user", "to", "item"),
@@ -346,7 +346,7 @@ def train(model, optimizer, loader):
 
         loss.backward()
         optimizer.step()
-        total_loss += float(loss)
+        total_loss += loss.detach().item()
         total_examples += pred.numel()
 
     return total_loss / total_examples
@@ -398,7 +398,7 @@ if __name__ == "__main__":
 
     dataset_name = "taobao"
 
-    torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
+    torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600), device_id=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"))
     world_size = torch.distributed.get_world_size()
     global_rank = torch.distributed.get_rank()
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -411,7 +411,7 @@ if __name__ == "__main__":
 
     # Create the uid needed for cuGraph comms
     if global_rank == 0:
-        from cugraph.gnn import (
+        from pylibcugraph.comms import (
             cugraph_comms_create_unique_id,
         )
 
@@ -536,6 +536,6 @@ if __name__ == "__main__":
 
     wm_finalize()
 
-    from cugraph.gnn import cugraph_comms_shutdown
+    from pylibcugraph.comms import cugraph_comms_shutdown
 
     cugraph_comms_shutdown()

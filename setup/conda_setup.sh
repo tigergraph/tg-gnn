@@ -14,6 +14,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_NAME="tg-gnn"
 CONDA_PKGS=(
     "rapids=26.02"
+    "pylibwholegraph=26.02"
+    "cugraph-pyg=26.02"
     "python=3.12"
     "cuda-version>=12.2,<=12.9"
     "pytorch=*=*cuda*"
@@ -29,4 +31,4 @@ fi
 conda activate "$ENV_NAME"
 
 echo ""
-echo "Setup complete. Run: conda activate $ENV_NAME && pip install -e . --no-deps"
+echo "Setup complete. Run: cd ~/tg-gnn && pip install ."

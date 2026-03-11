@@ -81,7 +81,7 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 
     torch.cuda.set_device(local_rank)
 
-    from cugraph.gnn import cugraph_comms_init
+    from pylibcugraph.comms import cugraph_comms_init
 
     cugraph_comms_init(
         rank=global_rank, world_size=world_size, uid=cugraph_id, device=local_rank
@@ -138,7 +138,7 @@ def load_partitions(metadata, wg_mem_type):
 
     # --- Build cuGraph stores -----------------------------------------------
     graph_store = GraphStore()
-    feature_store = FeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore()
 
     graph_store[
         ("user", "rates", "movie"),
@@ -259,7 +259,7 @@ def train(train_loader, model, optimizer):
         loss.backward()
         optimizer.step()
 
-        total_loss += float(loss) * y.numel()
+        total_loss += loss.detach().item() * y.numel()
         total_examples += y.numel()
 
     return total_loss / total_examples
@@ -359,7 +359,7 @@ if __name__ == "__main__":
     metadata["num_tg_nodes"] = args.tg_nodes
     subprocess.run(['sudo', 'chmod', '-R', '0777', args.data_dir])
 
-    torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
+    torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600), device_id=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"))
     world_size = torch.distributed.get_world_size()
     global_rank = torch.distributed.get_rank()
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -371,7 +371,7 @@ if __name__ == "__main__":
 
     # Create the uid needed for cuGraph comms
     if global_rank == 0:
-        from cugraph.gnn import (
+        from pylibcugraph.comms import (
             cugraph_comms_create_unique_id,
         )
         cugraph_id = [cugraph_comms_create_unique_id()]
@@ -452,7 +452,7 @@ if __name__ == "__main__":
         auc = test(test_loader, model)
         print(f"Test AUC: {auc:.4f} ")
 
-    from cugraph.gnn import cugraph_comms_shutdown
+    from pylibcugraph.comms import cugraph_comms_shutdown
 
     cugraph_comms_shutdown()
     wm_finalize()

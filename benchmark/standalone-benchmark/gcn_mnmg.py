@@ -32,7 +32,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 import torch_geometric
 
-from cugraph.gnn import (
+from pylibcugraph.comms import (
     cugraph_comms_init,
     cugraph_comms_shutdown,
     cugraph_comms_create_unique_id,
@@ -143,7 +143,7 @@ def load_partitioned_data(
     from cugraph_pyg.data import GraphStore, FeatureStore
 
     graph_store = GraphStore()
-    feature_store = FeatureStore(memory_type=wg_mem_type)
+    feature_store = FeatureStore()
 
     # Load metadata
     with open(meta_path, "r") as f:
@@ -372,7 +372,7 @@ if __name__ == "__main__":
     wall_clock_start = time.perf_counter()
 
     if "LOCAL_RANK" in os.environ:
-        dist.init_process_group("nccl", timeout=timedelta(seconds=7200))
+        dist.init_process_group("nccl", timeout=timedelta(seconds=7200), device_id=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"))
         world_size = dist.get_world_size()
         global_rank = dist.get_rank()
         local_rank = int(os.environ["LOCAL_RANK"])

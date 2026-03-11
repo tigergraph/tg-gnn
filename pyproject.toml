@@ -7,13 +7,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tg-gnn"
-version = "0.1.0"
+version = "0.2.0"
 description = "Tigergraph GNN project"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [
-    { name = "Zettabolt"}
+    { name = "TigerGraph"}
 ]
 
 keywords = ["graph", "gnn", "tigergraph"]
@@ -35,35 +35,21 @@ dependencies = [
     "scikit-learn",
     "ogb",
     "tqdm",
-]
-
-[project.optional-dependencies]
-# RAPIDS GPU stack — installed via conda (setup/conda_setup.sh), listed here for
-# documentation purposes. Do not pip-install these directly.
-rapids = [
-    "cudf-cu12",
-    "cupy-cuda12x",
-    "rmm-cu12",
-    "cugraph-cu12",
-    "cugraph-pyg",
-    "pylibwholegraph",
-]
-
-# Extra packages used only in benchmark/ scripts.
-benchmark = [
+    # benchmark
     "torchmetrics",
     "polars",
     "psutil",
-]
-
-# Extra packages used only in examples/movielens/ embedding scripts.
-examples = [
+    # examples
     "langchain-community",
     "langchain-text-splitters",
     "langchain-openai",
     "sentence-transformers",
 ]
 
+# The RAPIDS GPU stack (cudf, cupy, rmm, cugraph, pylibwholegraph, etc.) is managed
+# entirely by the setup scripts in setup/ and must not be declared here.
+
+[project.optional-dependencies]
 # Development / testing tools.
 test = [
     "pytest>=6.2.0",
