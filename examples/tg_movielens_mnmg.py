@@ -404,8 +404,6 @@ if __name__ == "__main__":
     eli_train = splits["train"]
     eli_test = splits["test"]
 
-    # Temporal-aware loaders: time_attr enables temporal neighbor sampling,
-    # edge_label_time with -1 offset prevents future information leakage
     kwargs = dict(
         data=(feature_store, graph_store),
         num_neighbors={
@@ -413,20 +411,24 @@ if __name__ == "__main__":
             ("movie", "rev_rates", "user"): [5, 5, 5],
         },
         batch_size=256,
-        time_attr="time",
         shuffle=True,
         drop_last=True,
     )
 
     from cugraph_pyg.loader import LinkNeighborLoader
 
+    # time_attr + edge_label_time enable temporal neighbor sampling on train only;
+    # -1 offset prevents future information leakage.
     train_loader = LinkNeighborLoader(
         edge_label_index=(("user", "rates", "movie"), eli_train),
-        edge_label_time=time_splits["train"] - 1,  # -1 prevents temporal leakage
+        edge_label_time=time_splits["train"] - 1,
+        time_attr="time",
         neg_sampling=dict(mode="binary", amount=2),
         **kwargs,
     )
 
+    # Test loader uses non-temporal sampling (no time_attr/edge_label_time),
+    # matching the upstream RAPIDS reference example.
     test_loader = LinkNeighborLoader(
         edge_label_index=(("user", "rates", "movie"), eli_test),
         neg_sampling=dict(mode="binary", amount=1),
