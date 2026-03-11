@@ -31,7 +31,7 @@ from pyTigerGraph import TigerGraphConnection
 
 import torch_geometric
 
-from cugraph.gnn import (
+from pylibcugraph.comms import (
     cugraph_comms_init,
     cugraph_comms_shutdown,
     cugraph_comms_create_unique_id,
@@ -294,15 +294,15 @@ def parse_args():
 #### TG changes 2: load partitions ####
 # use load_tg_data to read the TG exported data
 # load_tg_data will returned Data or HeteroData object of PyG
-# using Data or HeteroData object you can create GraphStore and WholeFeatureStore
+# using Data or HeteroData object you can create GraphStore and FeatureStore
 def load_partitions(
     metadata: dict, 
     wg_mem_type: str, 
 ): 
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
+    from cugraph_pyg.data import GraphStore, FeatureStore
 
-    graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    graph_store = GraphStore()
+    feature_store = FeatureStore()
 
     # Load TG data and renumber the node ids
     # renumbering is required so keep it True
@@ -377,7 +377,7 @@ if __name__ == "__main__":
     args = parse_args()
     wall_clock_start = time.perf_counter()
     if "LOCAL_RANK" in os.environ:
-        dist.init_process_group("nccl", timeout=timedelta(seconds=7200))
+        dist.init_process_group("nccl", timeout=timedelta(seconds=7200), device_id=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"))
         world_size = dist.get_world_size()
         global_rank = dist.get_rank()
         local_rank = int(os.environ["LOCAL_RANK"])

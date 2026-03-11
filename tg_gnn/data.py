@@ -134,7 +134,8 @@ def load_tg_data(
     @timeit
     def load_edge_csv(rel_name: str, meta: dict) -> tuple | None:
         """
-        Reads an edge CSV file and extracts edge indices, attributes, labels, and masks.
+        Reads an edge CSV file and extracts edge indices, attributes, labels, masks,
+        and an optional time attribute.
 
         Args:
             rel_name (str): Relationship name. 
@@ -143,6 +144,7 @@ def load_tg_data(
                 - "dst" (str): Destination node type.
                 - "label" (str, optional): the edge label name.
                 - "split" (str, optional): the edge info about train/val/test splits.
+                - "time_attr" (str, optional): the edge time attribute name.
 
         Returns:
             tuple: A tuple containing the edge relationship tuple and a dictionary of edge data.
@@ -158,8 +160,9 @@ def load_tg_data(
         df = load_csv(file_paths)
         
         has_label = "label" in meta
-        has_split = "split" in meta  # In case edges have splits
-        features_start = 2 + int(has_label) + int(has_split)
+        has_split = "split" in meta
+        has_time = "time_attr" in meta
+        features_start = 2 + int(has_label) + int(has_split) + int(has_time)
         has_features = df.shape[1] > features_start
 
         edge_data = {
@@ -187,6 +190,12 @@ def load_tg_data(
             edge_data["train_mask"] = (splits == 0)
             edge_data["val_mask"]   = (splits == 1)
             edge_data["test_mask"]  = (splits == 2)
+
+        if has_time:
+            time_col_idx = 2 + int(has_label) + int(has_split)
+            edge_data["time"] = torch.as_tensor(
+                df.iloc[:, time_col_idx].values, dtype=torch.int64
+            )
 
         edge_data = {k: v.to(mem_loc) for k, v in edge_data.items()}
         
@@ -252,4 +261,5 @@ def load_tg_data(
     torch.cuda.empty_cache()
 
     return data
+
 

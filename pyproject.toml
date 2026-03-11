@@ -7,13 +7,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tg-gnn"
-version = "0.1.0"
+version = "0.2.0"
 description = "Tigergraph GNN project"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [
-    { name = "Zettabolt"}
+    { name = "TigerGraph"}
 ]
 
 keywords = ["graph", "gnn", "tigergraph"]
@@ -23,26 +23,40 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 
-# If you have direct dependencies, list them here:
+# Core runtime dependencies (pip-installable via PyPI).
+# The RAPIDS GPU stack must be installed first via one of the setup scripts:
+#   conda: setup/conda_setup.sh
+#   pip:   setup/python_setup.sh
 dependencies = [
     "pyTigerGraph",
-    "numba>=0.57",
-    "numpy>=1.23,<3.0a0",
+    "numpy>=1.23,<2.3",
     "pandas",
-    "tensordict>=0.1.2",
-    "torch-geometric>=2.5,<2.7",
-    "torch>=2.3",
+    "torch>=2.5",
+    "torch-geometric>=2.5",
     "scikit-learn",
-    "pytest",
-    "ogb"
-
+    "ogb",
+    "tqdm",
+    # benchmark
+    "torchmetrics",
+    "polars",
+    "psutil",
+    # examples
+    "langchain-community",
+    "langchain-text-splitters",
+    "langchain-openai",
+    "sentence-transformers",
+    # A transitive dependency in the RAPIDS stack imports pytest at runtime,
+    # so it must be a core dep rather than test-only.
+    "pytest>=6.2.0",
 ]
 
+# The RAPIDS GPU stack (cudf, cupy, rmm, cugraph, pylibwholegraph, etc.) is managed
+# entirely by the setup scripts in setup/ and must not be declared here.
+
 [project.optional-dependencies]
+# Development / testing tools.
 test = [
-    "ogb",
-    "pytest>=6.2.0",
-    "scikit-learn"
+    "pytest-mock",
 ]
 
 [tool.setuptools.packages.find]

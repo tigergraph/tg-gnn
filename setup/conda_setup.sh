@@ -1,20 +1,37 @@
 #!/bin/bash
+# Creates (or updates) the rapids-26.02 conda environment with RAPIDS + PyTorch.
+#
+# Usage:
+#   First time:  bash setup/conda_setup.sh
+#   Update:      bash setup/conda_setup.sh --update
+#
+# After setup, install tg-gnn itself:
+#   pip install .
 
-#bash ./Miniforge3-Linux-x86_64.sh -b -u -p ~/miniforge3
-#source ~/miniforge3/bin/activate
-#conda init
-#exit and relogin
-#conda create --name conda-forge-gnn python=3.12 --channel conda-forge --override-channels -y
-#conda activate conda-forge-gnn
+set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if conda info | grep "active environment" | grep "base" >/dev/null; then
-  conda config --add channels conda-forge
-  conda config --add channels rapidsai
-  conda config --set channel_priority strict
+ENV_NAME="tg-gnn"
+CONDA_PKGS=(
+    # cudf pulls in cupy, rmm, pylibcudf transitively.
+    # cugraph pulls in pylibcugraph transitively.
+    "cudf=26.02"
+    "cugraph=26.02"
+    "pylibwholegraph=26.02"
+    "cugraph-pyg=26.02"
+    "python=3.12"
+    "cuda-version>=12.2,<=12.9"
+    "pytorch=*=*cuda*"
+)
+
+if [ "$1" == "--update" ]; then
+  conda install -n "$ENV_NAME" -c rapidsai -c conda-forge -y "${CONDA_PKGS[@]}"
 else
-  conda config --env --add channels conda-forge
-  conda config --env --add channels rapidsai
-  conda config --env --set channel_priority strict
+  conda create -n "$ENV_NAME" -c rapidsai -c conda-forge -y "${CONDA_PKGS[@]}"
 fi
 
-conda install -y python-abi3=3.12 cucim=25.04 cudf=25.04 cuml=25.04 cuproj=25.04 cuspatial=25.04 cuvs=25.04 cuxfilter=25.04 dask-cuda=25.04 dask-cudf=25.04 nx-cugraph=25.04 pylibraft=25.04 raft-dask=25.04 cugraph=25.04 cugraph-pyg=25.04 cudf=25.04 pylibwholegraph=25.04
+# Activate to apply changes (caller must source this script or re-activate manually)
+conda activate "$ENV_NAME"
+
+echo ""
+echo "Setup complete. Run: cd ~/tg-gnn && pip install ."

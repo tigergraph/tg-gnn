@@ -158,6 +158,7 @@ def create_gsql_query(
         edge_features = edge.get("features_list", {})
         edge_split = edge.get("split", "")
         edge_label = edge.get("label", "")
+        time_attr = edge.get("time_attr", "")
         
         # process edge
         query += f"  // Process edge: {rel_name}\n"
@@ -178,6 +179,10 @@ def create_gsql_query(
         # add split 
         if edge_split:
             query += f",\n        edge_data_list = edge_data_list + \",\" + to_string(e.{edge_split})"
+
+        # add time attribute
+        if time_attr:
+            query += f",\n        edge_data_list = edge_data_list + \",\" + to_string(e.{time_attr})"
 
         # add features 
         if edge_features:

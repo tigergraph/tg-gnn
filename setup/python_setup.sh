@@ -1,34 +1,38 @@
 #!/bin/bash
+# Sets up a pip-based Python 3.12 venv with RAPIDS + PyTorch (pip alternative to conda_setup.sh).
+#
+# Usage:
+#   bash setup/python_setup.sh
+#
+# After setup, install tg-gnn itself:
+#   cd ~/tg-gnn && pip install .
 
-cd ~
+set -e
+
 sudo apt update -y
 sudo apt install -y python3.12-venv
 python3 -m venv venv
 source venv/bin/activate
 
+# System CUDA 12.9 libraries take precedence over pip-bundled ones
 export PATH="/usr/local/cuda/bin:$PATH"
 export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
-pip install torch torchvision torchaudio torch_geometric pytigergraph pytest tensordict pylibwholegraph-cu12
-
+# torch must be installed from the PyTorch CUDA index — plain PyPI only has CPU wheels.
+pip install "torch>=2.5" --index-url https://download.pytorch.org/whl/cu126
+# Remove pip's bundled CUDA 12.6 runtime so the system CUDA 12.9 in LD_LIBRARY_PATH
+# is used by both torch and RAPIDS (rmm/cugraph), avoiding the version mismatch that
+# causes cudaErrorInsufficientDriver in rmm.reinitialize().
+pip uninstall nvidia-cuda-runtime-cu12 -y || true
+# Only the RAPIDS packages actually used by tg-gnn.
+# cudf pulls in cupy, rmm, pylibcudf transitively.
+# cugraph pulls in pylibcugraph transitively.
 pip install \
-    --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
-    "cudf-cu12>=25.6.0a0,<=25.6" "dask-cudf-cu12>=25.6.0a0,<=25.6" \
-    "cuml-cu12>=25.6.0a0,<=25.6" "cugraph-cu12>=25.6.0a0,<=25.6" \
-    "nx-cugraph-cu12>=25.6.0a0,<=25.6" "cuspatial-cu12>=25.6.0a0,<=25.6" \
-    "cuproj-cu12>=25.6.0a0,<=25.6" "cuxfilter-cu12>=25.6.0a0,<=25.6" \
-    "cucim-cu12>=25.6.0a0,<=25.6" "pylibraft-cu12>=25.6.0a0,<=25.6" \
-    "raft-dask-cu12>=25.6.0a0,<=25.6" "cuvs-cu12>=25.6.0a0,<=25.6" \
-    "pylibraft-cu12>=25.6.0a0,<=25.6" "nx-cugraph-cu12>=25.6.0a0,<=25.6" \
-    "dask-cuda>=25.6.0a0,<=25.6" "cugraph-cu12>=25.6.0a0,<=25.6" \
-    "pylibwholegraph-cu12>=25.6.0a0,<=25.6" "cugraph-pyg-cu12>=25.6.0a0,<=25.6" \
-    "cudf-cu12>=25.6.0a0,<=25.6"
+    --extra-index-url=https://pypi.nvidia.com \
+    "cudf-cu12==26.2.*" \
+    "cugraph-cu12==26.2.*" \
+    "pylibwholegraph-cu12==26.2.*" \
+    "cugraph-pyg==26.2.*"
 
-git clone https://github.com/rapidsai/cugraph-gnn.git
-cd cugraph-gnn/python/cugraph-pyg/
-pip install --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
-cd -
-
-#git clone https://github.com/tigergraph/tg-gnn.git
-cd tg-gnn
-pip install --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple .
+echo ""
+echo "Setup complete. Run: cd ~/tg-gnn && pip install ."

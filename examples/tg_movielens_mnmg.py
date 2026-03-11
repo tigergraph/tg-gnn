@@ -1,22 +1,43 @@
+"""MovieLens temporal link-prediction example with TigerGraph + cuGraph-PyG.
+
+This example demonstrates temporal-aware GNN training for link prediction
+on the MovieLens dataset.  Edges carry a ``timestamp`` attribute that is
+used for:
+
+1. **Temporal train/test splitting** — the oldest 80 % of ratings form the
+   training set while the newest 20 % are held out for evaluation.
+2. **Temporal neighbor sampling** — ``LinkNeighborLoader`` with
+   ``time_attr='time'`` ensures that only neighbors whose edges occurred
+   *before* the target edge's timestamp are sampled, preventing future
+   information leakage.
+
+Usage (multi-GPU via torchrun)::
+
+    torchrun --nproc_per_node=<N_GPUS> tg_movielens_mnmg.py \\
+        --host http://<TG_HOST> --data_dir /tmp/tg
+
+Prerequisites:
+    1. Run ``examples/movielens/prepare_movielens.sh`` to download data and
+       generate embeddings.
+    2. Create the graph schema using
+       ``examples/movielens/movielens_schema.gsql``.
+    3. Load data using ``examples/movielens/load_movielens.gsql``.
+"""
+
 import os
 import subprocess
 import warnings
 from argparse import ArgumentParser
 from datetime import timedelta
 
-import json
-
 import torch
 import torch.nn.functional as F
 
 from torch.nn import Linear
 
-
 from tqdm import tqdm
 
 from torch_geometric import EdgeIndex
-from torch_geometric.datasets import MovieLens
-
 from torch_geometric.nn import SAGEConv
 from torch_geometric.data import HeteroData
 
@@ -27,7 +48,7 @@ from pylibwholegraph.torch.initialize import (
 
 from sklearn.metrics import roc_auc_score
 
-#### TG changes 1: import changes ####
+#### TigerGraph connection and data pipeline ####
 from pyTigerGraph import TigerGraphConnection
 import logging
 logging.basicConfig(
@@ -36,6 +57,7 @@ logging.basicConfig(
 )
 from tg_gnn.data import export_tg_data, load_tg_data
 from tg_gnn.utils import redistribute_splits
+
 
 def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
     import rmm
@@ -59,30 +81,31 @@ def init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id):
 
     torch.cuda.set_device(local_rank)
 
-    from cugraph.gnn import cugraph_comms_init
+    from pylibcugraph.comms import cugraph_comms_init
 
     cugraph_comms_init(
         rank=global_rank, world_size=world_size, uid=cugraph_id, device=local_rank
     )
 
     wm_init(global_rank, world_size, local_rank, torch.cuda.device_count())
-    
 
-#### TG changes 2: load partitions ####
-# use load_tg_data to read the TG exported data
-# load_tg_data will returned Data or HeteroData object of PyG
-# using Data or HeteroData object you can create GraphStore and WholeFeatureStore
+
+#### Load exported data, apply temporal split, and build cuGraph stores ####
+# Uses load_tg_data to read the TG exported data into PyG HeteroData.
+# Edges are sorted by timestamp and split 80/20 for train/test.
+# Time attributes are stored in the feature store for temporal neighbor sampling.
 def load_partitions(metadata, wg_mem_type):
-    from cugraph_pyg.data import GraphStore, WholeFeatureStore
-    
+    from cugraph_pyg.data import GraphStore, FeatureStore
+
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
     undirected = metadata.get("edges").get("rates").get("undirected", False)
+
     data = load_tg_data(metadata, renumber=True)
     print(f"Exported tg data loaded successfully.")
     print(f"TG data: {data}")
 
-    # there is no features exported for user using TG
+    # user has no features in TG — use identity matrix
     data["user"].x = (
         torch.tensor_split(
             torch.eye(data["user"].num_nodes, dtype=torch.float32), world_size
@@ -91,9 +114,31 @@ def load_partitions(metadata, wg_mem_type):
         .clone()
     )
 
-    # create feature store and graph store using data
-    graph_store = GraphStore(is_multi_gpu=True)
-    feature_store = WholeFeatureStore(memory_type=wg_mem_type)
+    # --- Temporal split: sort by timestamp, 80 % train / 20 % test ---------
+    edge_time = data["user", "rates", "movie"].time
+    perm = edge_time.argsort()
+
+    data["user", "rates", "movie"].edge_index = (
+        data["user", "rates", "movie"].edge_index[:, perm]
+    )
+    data["user", "rates", "movie"].time = edge_time[perm]
+
+    off = int(0.8 * perm.numel())
+    splits = {
+        "train": data["user", "rates", "movie"].edge_index[:, :off],
+        "test":  data["user", "rates", "movie"].edge_index[:, off:],
+    }
+    time_splits = {
+        "train": data["user", "rates", "movie"].time[:off],
+        "test":  data["user", "rates", "movie"].time[off:],
+    }
+
+    splits = redistribute_splits(splits)
+    time_splits = redistribute_splits(time_splits)
+
+    # --- Build cuGraph stores -----------------------------------------------
+    graph_store = GraphStore()
+    feature_store = FeatureStore()
 
     graph_store[
         ("user", "rates", "movie"),
@@ -113,15 +158,22 @@ def load_partitions(metadata, wg_mem_type):
     feature_store["user", "x", None] = data["user"].x
     feature_store["movie", "x", None] = data["movie"].x
 
-    # load splits 
-    splits = {}
-    splits["train"] = data["user", "rates", "movie"].edge_index[:, data["user", "rates", "movie"].train_mask]
-    splits["test"] = data["user", "rates", "movie"].edge_index[:, data["user", "rates", "movie"].test_mask]
+    # Store time attributes — nodes get t=0, edges keep their timestamps
+    feature_store["user", "time", None] = torch.tensor_split(
+        torch.zeros(data["user"].num_nodes, dtype=torch.int64), world_size
+    )[rank]
+    feature_store["movie", "time", None] = torch.tensor_split(
+        torch.zeros(data["movie"].num_nodes, dtype=torch.int64), world_size
+    )[rank]
+    feature_store[("user", "rates", "movie"), "time", None] = (
+        data["user", "rates", "movie"].time
+    )
+    if undirected:
+        feature_store[("movie", "rev_rates", "user"), "time", None] = (
+            data["movie", "rev_rates", "user"].time
+        )
 
-    splits = redistribute_splits(splits)
-    
-    return feature_store, graph_store, splits
-
+    return feature_store, graph_store, splits, time_splits
 
 
 class Encoder(torch.nn.Module):
@@ -140,11 +192,13 @@ class Encoder(torch.nn.Module):
         ).relu()
 
         movie_x = self.conv2(
-            (x_dict["user"], x_dict["movie"]), edge_index_dict["user", "rates", "movie"]
+            (x_dict["user"], x_dict["movie"]),
+            edge_index_dict["user", "rates", "movie"],
         ).relu()
 
         user_x = self.conv3(
-            (movie_x, user_x), edge_index_dict["movie", "rev_rates", "user"]
+            (movie_x, user_x),
+            edge_index_dict["movie", "rev_rates", "user"],
         ).relu()
 
         return {
@@ -168,14 +222,13 @@ class EdgeDecoder(torch.nn.Module):
             ],
             dim=-1,
         )
-
         z = self.lin1(z).relu()
         z = self.lin2(z)
         return z.view(-1)
 
 
 class Model(torch.nn.Module):
-    def __init__(self, hidden_channels,):
+    def __init__(self, hidden_channels):
         super().__init__()
         self.encoder = Encoder(hidden_channels, hidden_channels)
         self.decoder = EdgeDecoder(hidden_channels)
@@ -183,13 +236,13 @@ class Model(torch.nn.Module):
     def forward(self, x_dict, edge_index_dict, num_samples):
         x_dict = self.encoder(x_dict, edge_index_dict)
         return self.decoder(
-            x_dict, edge_index_dict["user", "rates", "movie"][:, :num_samples]
+            x_dict,
+            edge_index_dict["user", "rates", "movie"][:, :num_samples],
         )
 
 
 def train(train_loader, model, optimizer):
     model.train()
-
     total_loss = total_examples = 0
     for batch in tqdm(train_loader):
         batch = batch.to(device)
@@ -200,14 +253,13 @@ def train(train_loader, model, optimizer):
             batch.edge_index_dict,
             batch["user", "rates", "movie"].edge_label.shape[0],
         )
-
         y = batch["user", "rates", "movie"].edge_label
 
         loss = F.binary_cross_entropy_with_logits(out, y)
         loss.backward()
         optimizer.step()
 
-        total_loss += float(loss) * y.numel()
+        total_loss += loss.detach().item() * y.numel()
         total_examples += y.numel()
 
     return total_loss / total_examples
@@ -216,9 +268,7 @@ def train(train_loader, model, optimizer):
 @torch.no_grad()
 def test(test_loader, model):
     model.eval()
-
-    preds = []
-    targets = []
+    preds, targets = [], []
     for batch in test_loader:
         batch = batch.to(device)
         pred = (
@@ -231,23 +281,21 @@ def test(test_loader, model):
             .view(-1)
             .cpu()
         )
-
         target = batch["user", "rates", "movie"].edge_label.long().cpu()
-
         preds.append(pred)
         targets.append(target)
 
     pred = torch.cat(preds, dim=0).numpy()
     target = torch.cat(targets, dim=0).numpy()
-
     return roc_auc_score(target, pred)
 
 
-#### TG changes 3: define the metadata ####
-# Please update the metadata as per your Graph attributes and features
-# make sure to have all the required features in features list
-# and num of nodes for each node type
-# data_dir path is used to export the data from TG database
+#### Graph metadata: vertex types, edge types, features, and export config ####
+# Please update the metadata as per your Graph attributes and features.
+# Make sure to have all the required features in features list
+# and num of nodes for each node type.
+# data_dir path is used to export the data from TG database.
+# time_attr on the edge tells the framework which TG edge attribute holds the timestamp.
 metadata = {
     "nodes": {
         "user": {
@@ -259,20 +307,20 @@ metadata = {
             "features_list": {
                 "movie_embedding": "LIST"
             },
-            "num_nodes": 9742
-        }
-    }, 
+            "num_nodes": 9742,
+        },
+    },
     "edges": {
         "rates": {
             "undirected": True,
             "src": "user",
             "dst": "movie",
-            "split": "split"
-        }
+            "time_attr": "timestamp",
+        },
     },
     "data_dir": "/data/movielens",
     "fs_type": "shared",
-    "num_tg_nodes": 1
+    "num_tg_nodes": 1,
 }
 
 if __name__ == "__main__":
@@ -284,20 +332,20 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--epochs", type=int, default=16)
     parser.add_argument("--wg_mem_type", type=str, default="distributed")
-    parser.add_argument("-g", "--graph", default="movielens", 
+    parser.add_argument("-g", "--graph", default="movielens",
         help="The default graph for running queries.")
-    parser.add_argument("--host", default="http://172.17.0.3", 
+    parser.add_argument("--host", default="http://172.17.0.3",
         help=("The host name or IP address of the TigerGraph server."
             "Make sure to include the protocol (http:// or https://)."
             "If certPath is None and the protocol is https, a self-signed certificate will be used.")
     )
     parser.add_argument("--restppPort", default="9000", help="The port for REST++ queries.")
-    parser.add_argument("--username", "-u", default="tigergraph", 
+    parser.add_argument("--username", "-u", default="tigergraph",
         help="The username on the TigerGraph server.")
-    parser.add_argument("--password", "-p", default="tigergraph", 
+    parser.add_argument("--password", "-p", default="tigergraph",
         help="The password for that user.")
     parser.add_argument("--skip_tg_export", "-s", type=bool, default=False,
-        help="Wheather to skip the data export from TG. Default value (False) will fetch the data.")
+        help="Whether to skip the data export from TG. Default value (False) will fetch the data.")
     parser.add_argument("--data_dir", type=str, default="/tmp/tg",
         help="The directory to store the data exported from TG.")
     parser.add_argument("--file_system", type=str, default="shared",
@@ -311,23 +359,23 @@ if __name__ == "__main__":
     metadata["num_tg_nodes"] = args.tg_nodes
     subprocess.run(['sudo', 'chmod', '-R', '0777', args.data_dir])
 
-    torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600))
+    torch.distributed.init_process_group("nccl", timeout=timedelta(seconds=3600), device_id=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"))
     world_size = torch.distributed.get_world_size()
     global_rank = torch.distributed.get_rank()
     local_rank = int(os.environ["LOCAL_RANK"])
     device = torch.device(local_rank)
 
+    print(f"[rank{global_rank}] Starting on {os.uname().nodename} (local_rank={local_rank}, world_size={world_size})")
+
     if global_rank == 0:
         from rmm.allocators.torch import rmm_torch_allocator
-
         torch.cuda.change_current_allocator(rmm_torch_allocator)
 
     # Create the uid needed for cuGraph comms
     if global_rank == 0:
-        from cugraph.gnn import (
+        from pylibcugraph.comms import (
             cugraph_comms_create_unique_id,
         )
-
         cugraph_id = [cugraph_comms_create_unique_id()]
     else:
         cugraph_id = [None]
@@ -336,13 +384,9 @@ if __name__ == "__main__":
 
     init_pytorch_worker(global_rank, local_rank, world_size, cugraph_id)
 
-
     if not args.skip_tg_export and global_rank == 0:
-        #### TG changes 4: Export TG data ####
-        # write data from TG database to tmp path
-        # need to call only once so global_rank 0 is used.
-
-        # tg connection
+        #### Export graph data from TigerGraph to partitioned CSV files ####
+        # Only rank 0 exports; other ranks wait at the barrier below.
         conn = TigerGraphConnection(
             host=args.host,
             restppPort=args.restppPort,
@@ -354,14 +398,14 @@ if __name__ == "__main__":
         export_tg_data(conn, metadata, force=True)
 
     torch.distributed.barrier()
-    feature_store, graph_store, splits = load_partitions(metadata, args.wg_mem_type)
+    feature_store, graph_store, splits, time_splits = load_partitions(
+        metadata, args.wg_mem_type
+    )
     torch.distributed.barrier()
 
     eli_train = splits["train"]
-    eli_test = splits["test"] 
+    eli_test = splits["test"]
 
-
-    # TODO enable temporal sampling when it is available in cuGraph-PyG
     kwargs = dict(
         data=(feature_store, graph_store),
         num_neighbors={
@@ -369,23 +413,28 @@ if __name__ == "__main__":
             ("movie", "rev_rates", "user"): [5, 5, 5],
         },
         batch_size=256,
-        # time_attr='time',
         shuffle=True,
         drop_last=True,
-        # temporal_strategy='last',
     )
 
     from cugraph_pyg.loader import LinkNeighborLoader
 
+    # time_attr + edge_label_time enable temporal neighbor sampling on train only;
+    # -1 offset prevents future information leakage.
     train_loader = LinkNeighborLoader(
         edge_label_index=(("user", "rates", "movie"), eli_train),
-        # edge_label_time=time[train_index] - 1,  # No leakage.
+        edge_label_time=time_splits["train"] - 1,
+        time_attr="time",
         neg_sampling=dict(mode="binary", amount=2),
         **kwargs,
     )
 
+    # Test loader uses temporal sampling for consistent evaluation:
+    # negatives and neighbors are restricted to edges before each seed's timestamp.
     test_loader = LinkNeighborLoader(
         edge_label_index=(("user", "rates", "movie"), eli_test),
+        edge_label_time=time_splits["test"] - 1,
+        time_attr="time",
         neg_sampling=dict(mode="binary", amount=1),
         **kwargs,
     )
@@ -409,7 +458,7 @@ if __name__ == "__main__":
         auc = test(test_loader, model)
         print(f"Test AUC: {auc:.4f} ")
 
-    from cugraph.gnn import cugraph_comms_shutdown
+    from pylibcugraph.comms import cugraph_comms_shutdown
 
     cugraph_comms_shutdown()
     wm_finalize()
