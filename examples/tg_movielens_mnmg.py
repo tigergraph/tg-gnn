@@ -365,6 +365,8 @@ if __name__ == "__main__":
     local_rank = int(os.environ["LOCAL_RANK"])
     device = torch.device(local_rank)
 
+    print(f"[rank{global_rank}] Starting on {os.uname().nodename} (local_rank={local_rank}, world_size={world_size})")
+
     if global_rank == 0:
         from rmm.allocators.torch import rmm_torch_allocator
         torch.cuda.change_current_allocator(rmm_torch_allocator)
