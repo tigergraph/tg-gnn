@@ -99,6 +99,7 @@ metadata = {
 - **`undirected`**: The direction of the edge in TigerGraph. Reverse edge (e.g., `rev_uses`) will be generated when it's True.
 - **`src`**: The `from` vertex type of the edge in TigerGraph.
 - **`dst`**: The `to` vertex type of the edge in TigerGraph.
+- **`time_attr`**: The attribute name of the time attribute of the edge in TigerGraph.
 - **`data_dir`**: The temporary directory where TigerGraph will export the data and data would be assesed by GNN model training process.
 
 ---
