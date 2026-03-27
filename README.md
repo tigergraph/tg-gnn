@@ -77,6 +77,7 @@ metadata = {
             "undirected": True,
             "src": "<src_name>", 
             "dst": "<dst_name>",
+            "time_attr" (optional): "<time_attr_name>",
             "features_list" (optional): {
                 "feature1": "<feature_datatype (should be LIST or FLOAT)>",
                 "feature2": "LIST",
